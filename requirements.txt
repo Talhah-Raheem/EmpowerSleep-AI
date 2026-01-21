@@ -1,0 +1,20 @@
+# EmpowerSleep RAG Chatbot - Dependencies
+# =========================================
+# Install with: pip install -r requirements.txt
+
+# Vector store and embeddings
+faiss-cpu>=1.7.4          # Facebook AI Similarity Search (CPU version)
+sentence-transformers>=2.2.0  # Local embeddings (no API key needed)
+
+# LLM integration
+openai>=1.0.0             # For GPT API calls
+
+# Text processing
+langchain>=0.1.0          # Document loading and text splitting
+langchain-community>=0.0.10  # Community integrations
+
+# UI
+streamlit>=1.28.0         # Web interface
+
+# Utilities
+python-dotenv>=1.0.0      # Environment variable management
