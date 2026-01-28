@@ -1,77 +1,113 @@
-# CLAUDE.md
+# CLAUDE.md - EmpowerSleep Technical Reference
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file contains technical details about the codebase for Claude Code.
 
-## Project Overview
+## Architecture Overview
 
-EmpowerSleep is a Python-based RAG (Retrieval-Augmented Generation) chatbot providing sleep education with safety triage capabilities. It uses FAISS for vector search, sentence-transformers for embeddings, and OpenAI for response generation.
-
-## Commands
-
-```bash
-# Setup
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env  # Then add OPENAI_API_KEY
-
-# Build FAISS index (required before first run)
-python scripts/build_index.py
-
-# Run application
-streamlit run app.py
-
-# Test individual modules (each has demo code)
-python core/safety.py
-python core/service.py
-python core/vectorstore.py
-```
-
-No formal test suite or linter is configured.
-
-## Architecture
+This is a **self-contained RAG chatbot** for sleep education. The entire application logic lives in `app.py` - there is no separate `core/` module.
 
 ```
-app.py (UI) → core/service.py (orchestration) → core/safety.py (triage)
-                                              → core/vectorstore.py (RAG)
-                                              → OpenAI API (generation)
+User Question
+     │
+     ▼
+┌─────────────────────────────────────────────────────────┐
+│                    app.py (Streamlit)                   │
+│                                                         │
+│  1. embed_query() ──► OpenAI text-embedding-3-small    │
+│  2. retrieve_relevant_chunks() ──► FAISS search        │
+│  3. generate_answer() ──► GPT-4o-mini with context     │
+│  4. Display answer + sources                           │
+└─────────────────────────────────────────────────────────┘
 ```
-
-**Request Flow:**
-1. User question arrives at `app.py` (thin Streamlit UI)
-2. `core/service.py:answer_question()` orchestrates the workflow
-3. `core/safety.py:check_triage()` screens for crisis/urgent keywords first
-4. If safe, `core/vectorstore.py` performs semantic search (top-4 chunks)
-5. Context sufficiency guardrail checks if enough content (400+ chars)
-6. LLM generates grounded response using retrieved context
-7. Returns `ChatResponse` with answer, triage_level, and sources
-
-**Key Design Decisions:**
-- Safety triage happens before RAG (blocks dangerous queries immediately)
-- Keyword-based triage is an MVP; production would need ML classification
-- Context sufficiency guardrail prevents hallucination on out-of-scope queries
-- All configuration centralized in `config.py`
 
 ## Key Files
 
-- `config.py` - All settings (embedding model, chunk sizes, LLM params, safety keywords)
-- `core/service.py` - Main service layer, `answer_question()` is the entry point
-- `core/vectorstore.py` - FAISS index operations, embedding with `all-MiniLM-L6-v2`
-- `core/safety.py` - Crisis/urgent keyword detection and triage responses
-- `data/raw/` - Source documents (sleep_hygiene.txt, circadian_rhythm.txt, common_myths.txt)
-- `scripts/build_index.py` - Builds FAISS index from raw documents
+### app.py (Main Application)
+- **Self-contained** Streamlit app with all RAG logic
+- Uses `rag_artifacts/` for FAISS index and chunk metadata
+- Configuration constants at top of file (lines 30-60)
+- Key functions:
+  - `embed_query()` - Generate query embedding (line 179)
+  - `retrieve_relevant_chunks()` - FAISS similarity search (line 213)
+  - `generate_answer()` - LLM call with context (line 439)
+  - `answer_question()` - Main RAG pipeline (line 504)
+- Conversation history support for multi-turn context
+- System prompt enforces educational, non-diagnostic tone
+
+### scripts/scrape_empowersleep_blog.py
+- Scrapes articles from empowersleep.com/blog
+- Output: `data/blog_docs.jsonl`
+- Each article: `{title, url, text}`
+
+### scripts/build_blog_index.py
+- Reads `data/blog_docs.jsonl`
+- Chunks articles (~1000 words, 150 word overlap)
+- Generates embeddings with OpenAI `text-embedding-3-small`
+- Builds FAISS `IndexFlatIP` (cosine similarity)
+- Output: `rag_artifacts/faiss.index`, `chunks.jsonl`, `build_meta.json`
 
 ## Configuration
 
-Key settings in `config.py`:
-- Embedding: `all-MiniLM-L6-v2` (384-dim, local)
-- Chunking: 500 chars with 100 overlap
-- Retrieval: Top-4 results, 400-char minimum context
-- LLM: `gpt-4o-mini`, temperature 0.3, 500 max tokens
-- Safety keywords: `CRISIS_KEYWORDS` and `URGENT_KEYWORDS` lists
+All config is in `app.py` constants (no separate config.py):
 
-## Adding New Content
+| Setting | Value | Location |
+|---------|-------|----------|
+| Embedding Model | `text-embedding-3-small` | Line 43 |
+| Embedding Dim | 1536 | Line 44 |
+| Top-K Results | 4 | Line 47 |
+| LLM Model | `gpt-4o-mini` | Line 50 |
+| LLM Temperature | 0.3 | Line 51 |
+| Max Tokens | 600 | Line 52 |
 
-1. Add documents to `data/raw/`
-2. Run `python scripts/build_index.py` to rebuild index
-3. Index persists to `data/faiss_index/`
+## Data Flow
+
+1. **Scraping**: `scrape_empowersleep_blog.py` → `data/blog_docs.jsonl`
+2. **Indexing**: `build_blog_index.py` → `rag_artifacts/`
+3. **Serving**: `app.py` loads index, handles queries
+
+## Important Behaviors
+
+### System Prompt (lines 307-365)
+- **Non-diagnostic**: Never labels user with conditions
+- Uses pattern-based language ("This is often associated with...")
+- Asks clarifying questions when context is incomplete
+- Maintains conversation continuity
+
+### Conversation Context
+- `build_search_query()` combines original topic with follow-ups for better retrieval
+- `format_conversation_history()` includes last 3 turns in LLM prompt
+- Prevents topic drift on clarifying answers
+
+## Dependencies
+
+- `faiss-cpu` - Vector similarity search
+- `openai` - Embeddings + LLM
+- `streamlit` - Web UI
+- `python-dotenv` - Environment variables
+- `sentence-transformers` - Listed but not used (legacy)
+- `langchain` / `langchain-community` - Listed but not used (legacy)
+
+## Running Locally
+
+```bash
+source venv/bin/activate
+streamlit run app.py
+```
+
+Requires:
+- `OPENAI_API_KEY` in `.env`
+- `rag_artifacts/` populated (run build_blog_index.py first)
+
+## Common Tasks
+
+### Rebuild index after content changes
+```bash
+python scripts/scrape_empowersleep_blog.py
+python scripts/build_blog_index.py
+```
+
+### Modify retrieval behavior
+Edit `TOP_K_RESULTS` in app.py line 47
+
+### Modify LLM behavior
+Edit `SYSTEM_PROMPT` in app.py lines 307-365

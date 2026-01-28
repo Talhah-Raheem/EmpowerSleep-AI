@@ -44,6 +44,12 @@ env/
 # Generated data (rebuild with build_index.py)
 data/faiss_index/
 
+# Scraped content (regenerate with scrape_empowersleep_blog.py)
+data/blog_docs.jsonl
+
+# RAG artifacts (embeddings, indexes, etc.)
+rag_artifacts/
+
 # Streamlit
 .streamlit/
 
@@ -54,3 +60,6 @@ data/faiss_index/
 .DS_Store
 Thumbs.db
 .claude/
+
+# Claude Code context
+CLAUDE.md
