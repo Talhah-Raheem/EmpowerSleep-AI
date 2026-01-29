@@ -278,25 +278,105 @@ def get_unique_sources(chunks: list[dict]) -> list[dict]:
     Multiple chunks may come from the same article, so we
     deduplicate by URL to show each source only once.
 
+    For textbook sources, we group by book and show page ranges.
+
     Args:
         chunks: List of retrieved chunks
 
     Returns:
-        list[dict]: Unique sources with {title, url}
+        list[dict]: Unique sources with metadata for display
     """
     seen_urls = set()
     sources = []
 
+    # Group textbook chunks by book to combine page ranges
+    textbook_pages = {}  # book_title -> list of (page_start, page_end, chapter)
+
     for chunk in chunks:
-        url = chunk.get("url", "")
-        if url and url not in seen_urls:
-            seen_urls.add(url)
-            sources.append({
-                "title": chunk.get("title", "Unknown"),
-                "url": url
+        source_type = chunk.get("source", "blog")
+
+        if source_type == "textbook":
+            book_title = chunk.get("book_title", "Textbook")
+            page_start = chunk.get("page_start", 0)
+            page_end = chunk.get("page_end", page_start)
+            chapter = chunk.get("chapter")
+
+            if book_title not in textbook_pages:
+                textbook_pages[book_title] = []
+            textbook_pages[book_title].append({
+                "page_start": page_start,
+                "page_end": page_end,
+                "chapter": chapter,
             })
+        else:
+            # Blog source - deduplicate by URL
+            url = chunk.get("url", "")
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                sources.append({
+                    "source": "blog",
+                    "title": chunk.get("title", "Unknown"),
+                    "url": url
+                })
+
+    # Add textbook sources with combined page info
+    for book_title, page_info in textbook_pages.items():
+        # Get min/max pages
+        all_starts = [p["page_start"] for p in page_info]
+        all_ends = [p["page_end"] for p in page_info]
+        page_min = min(all_starts)
+        page_max = max(all_ends)
+
+        # Get unique chapters mentioned
+        chapters = list(set(p["chapter"] for p in page_info if p["chapter"]))
+
+        sources.append({
+            "source": "textbook",
+            "book_title": book_title,
+            "page_start": page_min,
+            "page_end": page_max,
+            "chapters": chapters,
+        })
 
     return sources
+
+
+def format_source_display(source: dict) -> str:
+    """
+    Format a source for display in the UI.
+
+    Args:
+        source: Source dict with metadata
+
+    Returns:
+        str: Formatted markdown string for display
+    """
+    if source.get("source") == "textbook":
+        book_title = source.get("book_title", "Textbook")
+        page_start = source.get("page_start", 0)
+        page_end = source.get("page_end", page_start)
+        chapters = source.get("chapters", [])
+
+        # Format page range
+        if page_start == page_end:
+            pages = f"p. {page_start}"
+        else:
+            pages = f"pp. {page_start}-{page_end}"
+
+        # Format chapter if available
+        chapter_str = ""
+        if chapters and len(chapters) == 1:
+            chapter_str = f" - {chapters[0]}"
+        elif chapters:
+            # Multiple chapters - just show the first
+            chapter_str = f" - {chapters[0]}"
+
+        return f"📖 **{book_title}**{chapter_str} ({pages})"
+    else:
+        # Blog source
+        title = source.get("title", "Unknown")
+        url = source.get("url", "#")
+        return f"[{title}]({url})"
 
 
 # =============================================================================
@@ -647,9 +727,7 @@ def display_message(message: dict):
         if role == "assistant" and sources:
             with st.expander("📚 **Sources** (click to expand)"):
                 for source in sources:
-                    title = source.get("title", "Unknown")
-                    url = source.get("url", "#")
-                    st.markdown(f"- [{title}]({url})")
+                    st.markdown(f"- {format_source_display(source)}")
 
 
 # Display all messages in history
@@ -704,9 +782,7 @@ def process_user_input(user_input: str):
         if sources:
             with st.expander("📚 **Sources** (click to expand)"):
                 for source in sources:
-                    title = source.get("title", "Unknown")
-                    url = source.get("url", "#")
-                    st.markdown(f"- [{title}]({url})")
+                    st.markdown(f"- {format_source_display(source)}")
 
     # Add assistant message to history
     st.session_state.messages.append({

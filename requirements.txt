@@ -13,6 +13,9 @@ openai>=1.0.0             # For GPT API calls
 langchain>=0.1.0          # Document loading and text splitting
 langchain-community>=0.0.10  # Community integrations
 
+# PDF extraction
+PyMuPDF>=1.23.0           # PDF text extraction (imported as fitz)
+
 # UI
 streamlit>=1.28.0         # Web interface
 
