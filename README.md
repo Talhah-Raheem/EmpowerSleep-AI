@@ -1,102 +1,190 @@
 # EmpowerSleep
 
-A sleep education chatbot powered by RAG (Retrieval-Augmented Generation) using content from the EmpowerSleep blog.
+A sleep education chatbot powered by RAG (Retrieval-Augmented Generation) using content from the EmpowerSleep blog and textbooks.
+
+## Architecture
+
+The application uses a modern split architecture:
+- **Backend**: FastAPI serving the RAG pipeline
+- **Frontend**: Next.js (App Router) with a modern chat UI
 
 ## Quick Start
 
+### 1. Setup Python Environment
+
 ```bash
-# 1. Setup
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+```
 
-# 2. Add your OpenAI API key to .env
+### 2. Configure Environment
+
+```bash
+# Add your OpenAI API key
 echo "OPENAI_API_KEY=sk-..." > .env
+```
 
-# 3. Scrape blog content and build index
+### 3. Build the Index
+
+```bash
+# Scrape blog content and build index
 python scripts/scrape_empowersleep_blog.py
 python scripts/build_blog_index.py
 
-# 4. Run the app
-streamlit run app.py
+# (Optional) Add a textbook
+python scripts/ingest_textbook.py \
+    --pdf data/raw/Sleep_And_Health.pdf \
+    --book-title "Sleep and Health"
 ```
 
-## How It Works
+### 4. Run the Application
 
-1. User asks a sleep-related question
-2. Question is embedded and matched against blog content using FAISS
-3. Relevant content is retrieved and used as context
-4. GPT-4o-mini generates a grounded, educational answer
-5. Sources are cited for transparency
+```bash
+# Terminal 1: Start the backend
+python -m uvicorn backend.main:app --reload --port 8000
+
+# Terminal 2: Start the frontend
+cd frontend
+npm install
+npm run dev
+```
+
+Then open http://localhost:3000
 
 ## Project Structure
 
 ```
 EMPOWERSLEEP/
-├── app.py                  # Streamlit app (self-contained)
-├── requirements.txt        # Dependencies
-├── .env                    # OpenAI API key (create this)
+├── backend/
+│   └── main.py                 # FastAPI backend
+├── frontend/
+│   ├── app/
+│   │   ├── layout.tsx          # Root layout
+│   │   ├── page.tsx            # Chat page
+│   │   └── globals.css         # Styles
+│   ├── components/
+│   │   ├── ChatMessage.tsx     # Message bubbles
+│   │   └── SourceCard.tsx      # Source citations
+│   ├── lib/
+│   │   └── api.ts              # API client
+│   └── package.json
 ├── rag/
+│   ├── chat_engine.py          # Core RAG logic (used by backend)
 │   └── ingestion/
-│       └── textbook_ingestor.py  # PDF textbook ingestion
+│       └── textbook_ingestor.py
 ├── scripts/
-│   ├── scrape_empowersleep_blog.py  # Scrape blog articles
-│   ├── build_blog_index.py          # Build FAISS index
-│   └── ingest_textbook.py           # Ingest PDF textbooks
+│   ├── scrape_empowersleep_blog.py
+│   ├── build_blog_index.py
+│   └── ingest_textbook.py
 ├── data/
-│   ├── blog_docs.jsonl     # Scraped articles (generated)
-│   └── raw/                # Place PDF textbooks here
-└── rag_artifacts/          # FAISS index + chunks (generated)
-    ├── faiss.index         # Combined vector index
-    ├── chunks.jsonl        # All chunks (blog + textbook)
-    └── textbook_manifest.json  # Tracks indexed textbooks
+│   ├── blog_docs.jsonl
+│   └── raw/                    # PDF textbooks
+├── rag_artifacts/              # FAISS index + chunks
+└── requirements.txt
 ```
+
+## API Endpoints
+
+### POST /chat
+
+Send a message and get a response with sources.
+
+**Request:**
+```json
+{
+  "message": "What is sleep hygiene?",
+  "history": [
+    {"role": "user", "content": "..."},
+    {"role": "assistant", "content": "..."}
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "answer": "Sleep hygiene refers to...",
+  "sources": [
+    {
+      "source_type": "textbook",
+      "title": "Sleep and Health",
+      "chapter": "Chapter 3: Sleep Hygiene",
+      "page_start": 45,
+      "page_end": 48
+    },
+    {
+      "source_type": "blog",
+      "title": "5 Tips for Better Sleep",
+      "url": "https://empowersleep.com/..."
+    }
+  ]
+}
+```
+
+### GET /health
+
+Health check endpoint.
+
+### GET /stats
+
+Get knowledge base statistics.
 
 ## Textbook Ingestion
 
-You can add PDF textbooks to the knowledge base for richer educational content.
-
-### Ingest a Textbook
+Add PDF textbooks to enhance the knowledge base:
 
 ```bash
-# Place your PDF in data/raw/
-cp ~/Downloads/Sleep_And_Health.pdf data/raw/
-
-# Run ingestion
 python scripts/ingest_textbook.py \
-    --pdf data/raw/Sleep_And_Health.pdf \
-    --book-title "Sleep and Health" \
+    --pdf data/raw/YourTextbook.pdf \
+    --book-title "Your Book Title" \
     --version v1
 ```
 
-### Options
+**Options:**
+- `--pdf`: Path to PDF file
+- `--book-title`: Display title
+- `--version`: Version string (change to force re-index)
+- `--rebuild`: Force re-processing
 
-- `--pdf`: Path to the PDF file
-- `--book-title`: Human-readable title for display
-- `--version`: Version string for idempotency (change to force re-index)
-- `--rebuild`: Force re-processing even if already indexed
-
-### Smoke Test
-
-Verify the index includes textbook content:
-
+**Smoke Test:**
 ```bash
-python scripts/ingest_textbook.py --smoke-test "What is sleep architecture?"
+python scripts/ingest_textbook.py --smoke-test "What is REM sleep?"
 ```
 
-### Features
+## Source Citations
 
-- **Automatic chapter detection**: Chapters are extracted and shown in citations
-- **Page tracking**: Sources show page numbers (e.g., "pp. 42-44")
-- **Idempotent**: Re-running skips already-indexed documents
-- **Merged index**: Textbook content is searchable alongside blog articles
-- **Smart cleaning**: TOC, index, and bibliography pages are excluded
+The chat displays sources differently based on type:
+
+- **Textbook**: 📖 **Sleep and Health** – Chapter 3 (pp. 45–48)
+- **Blog**: [Article Title](https://empowersleep.com/...)
+
+## How It Works
+
+1. User asks a sleep-related question
+2. Question is embedded using OpenAI text-embedding-3-small
+3. FAISS retrieves the most relevant chunks (blog + textbook)
+4. GPT-4o-mini generates a grounded, educational answer
+5. Sources are cited with page numbers (textbooks) or links (blog)
 
 ## Requirements
 
 - Python 3.9+
+- Node.js 18+ (for frontend)
 - OpenAI API key
+
+## Environment Variables
+
+**Backend (.env):**
+```
+OPENAI_API_KEY=sk-...
+```
+
+**Frontend (.env.local):**
+```
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
 
 ---
 
-*Built with Streamlit + FAISS + OpenAI*
+*Built with FastAPI + Next.js + FAISS + OpenAI*

@@ -4,99 +4,158 @@ This file contains technical details about the codebase for Claude Code.
 
 ## Architecture Overview
 
-This is a **self-contained RAG chatbot** for sleep education. The entire application logic lives in `app.py` - there is no separate `core/` module.
+This is a **RAG chatbot** for sleep education with a split architecture:
+- **Backend**: FastAPI serving the RAG pipeline
+- **Frontend**: Next.js (App Router) with a modern chat UI
 
 ```
 User Question
      │
      ▼
 ┌─────────────────────────────────────────────────────────┐
-│                    app.py (Streamlit)                   │
+│              frontend (Next.js @ :3000)                 │
 │                                                         │
-│  1. embed_query() ──► OpenAI text-embedding-3-small    │
-│  2. retrieve_relevant_chunks() ──► FAISS search        │
-│  3. generate_answer() ──► GPT-4o-mini with context     │
-│  4. Display answer + sources                           │
+│  1. User types question in chat UI                      │
+│  2. POST /chat to backend                               │
+│  3. Display answer + sources                            │
+└─────────────────────────────────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────────────────────────────────┐
+│              backend (FastAPI @ :8000)                  │
+│                                                         │
+│  1. ChatEngine.ask_question()                           │
+│  2. embed_query() ──► OpenAI text-embedding-3-small    │
+│  3. retrieve_chunks() ──► FAISS search                 │
+│  4. generate_answer() ──► GPT-4o-mini with context     │
+│  5. Return JSON { answer, sources }                     │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ## Key Files
 
-### app.py (Main Application)
-- **Self-contained** Streamlit app with all RAG logic
-- Uses `rag_artifacts/` for FAISS index and chunk metadata
-- Configuration constants at top of file (lines 30-60)
-- Key functions:
-  - `embed_query()` - Generate query embedding (line 179)
-  - `retrieve_relevant_chunks()` - FAISS similarity search (line 213)
-  - `generate_answer()` - LLM call with context (line 439)
-  - `answer_question()` - Main RAG pipeline (line 504)
-- Conversation history support for multi-turn context
+### Backend
+
+**`backend/main.py`** - FastAPI application
+- `POST /chat` - Main chat endpoint
+- `GET /health` - Health check
+- `GET /stats` - Index statistics
+- CORS configured for localhost:3000
+
+**`rag/chat_engine.py`** - Core RAG logic
+- `ChatEngine` class - Main interface
+- `ask_question(message, history)` - Returns (answer, sources)
+- Configuration constants at top of file
 - System prompt enforces educational, non-diagnostic tone
 
-### scripts/scrape_empowersleep_blog.py
+**`rag/ingestion/textbook_ingestor.py`** - PDF ingestion
+- Extracts text from PDFs using PyMuPDF
+- Detects chapters, removes headers/footers
+- Creates chunks with page tracking
+
+### Frontend
+
+**`frontend/app/page.tsx`** - Main chat page
+- Chat interface with message bubbles
+- Calls `/chat` endpoint
+- Displays sources (textbook with pages, blog with links)
+
+**`frontend/components/`**
+- `ChatMessage.tsx` - Message bubble component
+- `SourceCard.tsx` - Source citation display
+- `SleepLoader.tsx` - Branded loading animation
+
+**`frontend/lib/api.ts`** - API client for backend
+
+### Scripts
+
+**`scripts/scrape_empowersleep_blog.py`**
 - Scrapes articles from empowersleep.com/blog
 - Output: `data/blog_docs.jsonl`
-- Each article: `{title, url, text}`
 
-### scripts/build_blog_index.py
-- Reads `data/blog_docs.jsonl`
+**`scripts/build_blog_index.py`**
 - Chunks articles (~1000 words, 150 word overlap)
-- Generates embeddings with OpenAI `text-embedding-3-small`
-- Builds FAISS `IndexFlatIP` (cosine similarity)
-- Output: `rag_artifacts/faiss.index`, `chunks.jsonl`, `build_meta.json`
+- Generates embeddings with OpenAI
+- Builds FAISS index
+- Output: `rag_artifacts/`
+
+**`scripts/ingest_textbook.py`**
+- CLI for ingesting PDF textbooks
+- Merges with existing index
+- Tracks via manifest for idempotency
 
 ## Configuration
 
-All config is in `app.py` constants (no separate config.py):
+All config is in `rag/chat_engine.py`:
 
-| Setting | Value | Location |
-|---------|-------|----------|
-| Embedding Model | `text-embedding-3-small` | Line 43 |
-| Embedding Dim | 1536 | Line 44 |
-| Top-K Results | 4 | Line 47 |
-| LLM Model | `gpt-4o-mini` | Line 50 |
-| LLM Temperature | 0.3 | Line 51 |
-| Max Tokens | 600 | Line 52 |
+| Setting | Value |
+|---------|-------|
+| Embedding Model | `text-embedding-3-small` |
+| Embedding Dim | 1536 |
+| Top-K Results | 4 |
+| LLM Model | `gpt-4o-mini` |
+| LLM Temperature | 0.3 |
+| Max Tokens | 600 |
 
 ## Data Flow
 
 1. **Scraping**: `scrape_empowersleep_blog.py` → `data/blog_docs.jsonl`
 2. **Indexing**: `build_blog_index.py` → `rag_artifacts/`
-3. **Serving**: `app.py` loads index, handles queries
+3. **Textbooks**: `ingest_textbook.py` → merges into `rag_artifacts/`
+4. **Serving**: Backend loads index, handles queries via `/chat`
 
 ## Important Behaviors
 
-### System Prompt (lines 307-365)
+### System Prompt
 - **Non-diagnostic**: Never labels user with conditions
 - Uses pattern-based language ("This is often associated with...")
 - Asks clarifying questions when context is incomplete
 - Maintains conversation continuity
 
-### Conversation Context
-- `build_search_query()` combines original topic with follow-ups for better retrieval
-- `format_conversation_history()` includes last 3 turns in LLM prompt
-- Prevents topic drift on clarifying answers
+### Source Types
+- **Blog**: `{source_type: "blog", title, url}`
+- **Textbook**: `{source_type: "textbook", title, chapter, page_start, page_end}`
 
 ## Dependencies
 
+### Python (requirements.txt)
 - `faiss-cpu` - Vector similarity search
 - `openai` - Embeddings + LLM
-- `streamlit` - Web UI
+- `fastapi` + `uvicorn` - Backend API
+- `PyMuPDF` - PDF extraction
 - `python-dotenv` - Environment variables
-- `sentence-transformers` - Listed but not used (legacy)
-- `langchain` / `langchain-community` - Listed but not used (legacy)
+
+### Node.js (frontend/package.json)
+- `next` - React framework
+- `react-markdown` - Markdown rendering
+- `tailwindcss` - Styling
 
 ## Running Locally
 
 ```bash
+# Terminal 1: Backend
 source venv/bin/activate
-streamlit run app.py
+python -m uvicorn backend.main:app --reload --port 8000
+
+# Terminal 2: Frontend
+cd frontend
+npm install
+npm run dev
 ```
 
-Requires:
-- `OPENAI_API_KEY` in `.env`
-- `rag_artifacts/` populated (run build_blog_index.py first)
+Open http://localhost:3000
+
+## Environment Variables
+
+**Backend (.env)**
+```
+OPENAI_API_KEY=sk-...
+```
+
+**Frontend (frontend/.env.local)**
+```
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
 
 ## Common Tasks
 
@@ -106,8 +165,13 @@ python scripts/scrape_empowersleep_blog.py
 python scripts/build_blog_index.py
 ```
 
+### Add a textbook
+```bash
+python scripts/ingest_textbook.py --pdf data/raw/Book.pdf --book-title "Book Name"
+```
+
 ### Modify retrieval behavior
-Edit `TOP_K_RESULTS` in app.py line 47
+Edit `TOP_K_RESULTS` in `rag/chat_engine.py`
 
 ### Modify LLM behavior
-Edit `SYSTEM_PROMPT` in app.py lines 307-365
+Edit `SYSTEM_PROMPT` in `rag/chat_engine.py`

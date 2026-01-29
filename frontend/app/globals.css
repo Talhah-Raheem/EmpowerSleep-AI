@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom scrollbar for chat area */
+.chat-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 3px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
+/* Smooth animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Loading dots animation (legacy, kept for compatibility) */
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-6px);
+  }
+}
+
+.loading-dot {
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.loading-dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.loading-dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+/* Sleep loader "zzz" animation
+ * Creates a gentle floating effect for the z characters.
+ * Each z has a staggered delay for a cascading appearance.
+ */
+@keyframes zzzFloat {
+  0%, 100% {
+    opacity: 0.4;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+.zzz-float {
+  display: inline-block;
+  animation: zzzFloat 2s ease-in-out infinite;
+  font-weight: 600;
+  font-style: italic;
+}
+
+/* Staggered delays for each z - creates a gentle wave effect */
+.zzz-1 {
+  animation-delay: 0s;
+}
+
+.zzz-2 {
+  animation-delay: 0.3s;
+}
+
+.zzz-3 {
+  animation-delay: 0.6s;
+}
+
+/* Markdown styling in chat */
+.prose-chat p {
+  margin-bottom: 0.75rem;
+}
+
+.prose-chat p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-chat ul, .prose-chat ol {
+  margin-left: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.prose-chat li {
+  margin-bottom: 0.25rem;
+}
+
+.prose-chat strong {
+  font-weight: 600;
+}
+
+.prose-chat hr {
+  margin: 1rem 0;
+  border-color: #e5e7eb;
+}
+
+.prose-chat em {
+  color: #6b7280;
+  font-size: 0.875rem;
+}

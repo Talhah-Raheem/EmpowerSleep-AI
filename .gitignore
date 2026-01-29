@@ -6,33 +6,14 @@
 *.pem
 *.key
 
-# Python
+# Python bytecode
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
 
-# Virtual environments
+# Virtual environment
 venv/
-env/
-.venv/
-.env/
 
 # IDE
 .idea/
@@ -41,25 +22,16 @@ env/
 *.swo
 *~
 
-# Generated data (rebuild with build_index.py)
-data/faiss_index/
-
-# Scraped content (regenerate with scrape_empowersleep_blog.py)
+# Generated data (rebuild with scrape_empowersleep_blog.py)
 data/blog_docs.jsonl
 
-# RAG artifacts (embeddings, indexes, etc.)
+# RAG artifacts (rebuild with build_blog_index.py)
 rag_artifacts/
-
-# Streamlit
-.streamlit/
-
-# Jupyter
-.ipynb_checkpoints/
 
 # OS files
 .DS_Store
 Thumbs.db
-.claude/
 
-# Claude Code context
+# Claude Code
+.claude/
 CLAUDE.md
