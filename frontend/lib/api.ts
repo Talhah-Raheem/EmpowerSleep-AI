@@ -124,7 +124,7 @@ export function formatSourceDisplay(source: Source): {
   } else {
     // Blog/web source - return as link
     return {
-      icon: '📄',
+      icon: '📝',
       text: source.title,
       url: source.url,
     };

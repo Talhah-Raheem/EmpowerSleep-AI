@@ -65,9 +65,12 @@ EMPOWERSLEEP/
 │   │   └── globals.css         # Styles
 │   ├── components/
 │   │   ├── ChatMessage.tsx     # Message bubbles
-│   │   └── SourceCard.tsx      # Source citations
+│   │   ├── SourceCard.tsx      # Source citations
+│   │   └── SleepLoader.tsx     # Branded loading animation
 │   ├── lib/
-│   │   └── api.ts              # API client
+│   │   ├── api.ts              # API client
+│   │   ├── sleepThoughts.ts    # Loading screen messages
+│   │   └── sampleQuestions.ts  # Rotating welcome questions
 │   └── package.json
 ├── rag/
 │   ├── chat_engine.py          # Core RAG logic (used by backend)

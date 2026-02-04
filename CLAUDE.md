@@ -63,9 +63,12 @@ User Question
 **`frontend/components/`**
 - `ChatMessage.tsx` - Message bubble component
 - `SourceCard.tsx` - Source citation display
-- `SleepLoader.tsx` - Branded loading animation
+- `SleepLoader.tsx` - Branded loading animation with sleep thoughts
 
-**`frontend/lib/api.ts`** - API client for backend
+**`frontend/lib/`**
+- `api.ts` - API client for backend (supports request cancellation)
+- `sleepThoughts.ts` - Calm messages shown during loading
+- `sampleQuestions.ts` - Rotating sample questions for welcome screen
 
 ### Scripts
 
