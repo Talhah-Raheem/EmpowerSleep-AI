@@ -24,12 +24,12 @@ export function ChatMessage({ message }: ChatMessageProps) {
       <div
         className={`max-w-[85%] md:max-w-[75%] ${
           isUser
-            ? 'bg-indigo-600 text-white rounded-2xl rounded-br-md'
-            : 'bg-white border border-slate-200 rounded-2xl rounded-bl-md shadow-sm'
+            ? 'bg-empower-500 text-white rounded-2xl rounded-br-md shadow-sm'
+            : 'bg-white border border-empower-100 rounded-2xl rounded-bl-md shadow-sm'
         } px-4 py-3`}
       >
         {/* Message content */}
-        <div className={`prose-chat ${isUser ? 'text-white' : 'text-slate-800'}`}>
+        <div className={`prose-chat ${isUser ? 'text-white' : 'text-empower-800'}`}>
           {isUser ? (
             // User messages - plain text
             <p>{message.content}</p>
@@ -43,16 +43,16 @@ export function ChatMessage({ message }: ChatMessageProps) {
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-indigo-600 hover:underline"
+                    className="text-empower-600 hover:text-empower-700 hover:underline"
                   >
                     {children}
                   </a>
                 ),
                 // Style horizontal rules (disclaimer separator)
-                hr: () => <hr className="my-3 border-slate-200" />,
+                hr: () => <hr className="my-3 border-empower-100" />,
                 // Style emphasis (disclaimer text)
                 em: ({ children }) => (
-                  <em className="text-slate-500 text-sm not-italic">{children}</em>
+                  <em className="text-empower-400 text-sm not-italic">{children}</em>
                 ),
               }}
             >
@@ -76,11 +76,11 @@ export function ChatMessage({ message }: ChatMessageProps) {
 export function LoadingMessage() {
   return (
     <div className="flex justify-start animate-fade-in">
-      <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-md shadow-sm px-4 py-3">
+      <div className="bg-white border border-empower-100 rounded-2xl rounded-bl-md shadow-sm px-4 py-3">
         <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-slate-400 rounded-full loading-dot" />
-          <div className="w-2 h-2 bg-slate-400 rounded-full loading-dot" />
-          <div className="w-2 h-2 bg-slate-400 rounded-full loading-dot" />
+          <div className="w-2 h-2 bg-empower-300 rounded-full loading-dot" />
+          <div className="w-2 h-2 bg-empower-300 rounded-full loading-dot" />
+          <div className="w-2 h-2 bg-empower-300 rounded-full loading-dot" />
         </div>
       </div>
     </div>

@@ -12,12 +12,12 @@
 }
 
 .chat-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
+  background-color: #c3d5dd; /* empower-200 */
   border-radius: 3px;
 }
 
 .chat-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8;
+  background-color: #9ab8c5; /* empower-300 */
 }
 
 /* Smooth animations */
@@ -117,10 +117,10 @@
 
 .prose-chat hr {
   margin: 1rem 0;
-  border-color: #e5e7eb;
+  border-color: #e1eaee; /* empower-100 */
 }
 
 .prose-chat em {
-  color: #6b7280;
+  color: #7a9dac; /* empower-400 */
   font-size: 0.875rem;
 }

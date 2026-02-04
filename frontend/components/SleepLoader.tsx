@@ -22,17 +22,17 @@ export function SleepLoader() {
 
   return (
     <div className="flex justify-start animate-fade-in">
-      <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-md shadow-sm px-5 py-4 max-w-md">
+      <div className="bg-white border border-empower-100 rounded-2xl rounded-bl-md shadow-sm px-5 py-4 max-w-md">
         {/* Animated zzz indicator */}
         <div className="flex items-center gap-1 mb-2">
-          <span className="text-indigo-400 text-lg zzz-float zzz-1">z</span>
-          <span className="text-indigo-300 text-base zzz-float zzz-2">z</span>
-          <span className="text-indigo-200 text-sm zzz-float zzz-3">z</span>
+          <span className="text-empower-400 text-lg zzz-float zzz-1">z</span>
+          <span className="text-empower-300 text-base zzz-float zzz-2">z</span>
+          <span className="text-empower-200 text-sm zzz-float zzz-3">z</span>
         </div>
 
         {/* Sleep thought with subtle label */}
-        <div className="text-slate-500 text-sm">
-          <span className="text-slate-400 text-xs uppercase tracking-wide block mb-1">
+        <div className="text-empower-500 text-sm">
+          <span className="text-empower-400 text-xs uppercase tracking-wide block mb-1">
             While you wait…
           </span>
           <span className="italic">{sleepThought}</span>

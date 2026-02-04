@@ -1,12 +1,23 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Open_Sans, Poppins } from 'next/font/google'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
+const openSans = Open_Sans({
+  subsets: ['latin'],
+  variable: '--font-open-sans',
+  display: 'swap',
+})
+
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-poppins',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'EmpowerSleep - Sleep Education Assistant',
-  description: 'Get answers to your sleep questions with AI-powered education grounded in expert content.',
+  description: 'Sleep care, simplified. Get answers to your sleep questions with AI-powered education grounded in expert content.',
 }
 
 export default function RootLayout({
@@ -16,7 +27,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body className={`${openSans.variable} ${poppins.variable} font-sans`}>{children}</body>
     </html>
   )
 }

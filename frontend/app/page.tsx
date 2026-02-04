@@ -121,20 +121,24 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50">
+    <div className="flex flex-col h-screen bg-empower-50">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+      <header className="bg-white border-b border-empower-100 px-4 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
-          <span className="text-2xl">🌙</span>
+          <img
+            src="/empower_sleep_logo.jpeg"
+            alt="EmpowerSleep"
+            className="h-10 w-10 object-contain"
+          />
           <div>
-            <h1 className="text-lg font-semibold text-slate-800">EmpowerSleep</h1>
-            <p className="text-xs text-slate-500">Sleep Education Assistant</p>
+            <h1 className="text-lg font-heading font-semibold text-empower-700">EmpowerSleep</h1>
+            <p className="text-xs text-empower-400">Sleep care, simplified</p>
           </div>
         </div>
         {messages.length > 0 && (
           <button
             onClick={handleNewConversation}
-            className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1"
+            className="text-sm text-empower-500 hover:text-empower-700 font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-empower-50 transition-colors"
           >
             <span>New Chat</span>
           </button>
@@ -147,11 +151,15 @@ export default function ChatPage() {
           {/* Welcome message when empty */}
           {messages.length === 0 && (
             <div className="text-center py-12 animate-fade-in">
-              <div className="text-5xl mb-4">🌙</div>
-              <h2 className="text-xl font-semibold text-slate-800 mb-2">
+              <img
+                src="/empower_sleep_logo.jpeg"
+                alt="EmpowerSleep"
+                className="h-20 w-20 mx-auto mb-4 object-contain"
+              />
+              <h2 className="text-2xl font-heading font-semibold text-empower-700 mb-2">
                 Welcome to EmpowerSleep
               </h2>
-              <p className="text-slate-600 mb-8 max-w-md mx-auto">
+              <p className="text-empower-500 mb-8 max-w-md mx-auto">
                 Ask me anything about sleep. I&apos;ll provide educational information
                 grounded in expert content.
               </p>
@@ -162,7 +170,7 @@ export default function ChatPage() {
                   <button
                     key={question}
                     onClick={() => handleDemoClick(question)}
-                    className="px-4 py-2 bg-white border border-slate-200 rounded-full text-sm text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+                    className="px-4 py-2 bg-white border border-empower-200 rounded-full text-sm text-empower-600 hover:bg-empower-50 hover:border-empower-300 hover:text-empower-700 transition-colors shadow-sm"
                   >
                     {question}
                   </button>
@@ -182,8 +190,8 @@ export default function ChatPage() {
           {/* Error message */}
           {error && (
             <div className="flex justify-center animate-fade-in">
-              <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-600">
-                ⚠️ {error}
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600">
+                {error}
               </div>
             </div>
           )}
@@ -194,7 +202,7 @@ export default function ChatPage() {
       </main>
 
       {/* Input area */}
-      <footer className="bg-white border-t border-slate-200 px-4 py-3">
+      <footer className="bg-white border-t border-empower-100 px-4 py-4 shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
         <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
           <div className="flex gap-3">
             <input
@@ -204,17 +212,17 @@ export default function ChatPage() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask me about sleep..."
               disabled={isLoading}
-              className="flex-1 px-4 py-3 rounded-full border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-400"
+              className="flex-1 px-5 py-3 rounded-full border border-empower-200 focus:outline-none focus:ring-2 focus:ring-empower-400 focus:border-transparent disabled:bg-empower-50 disabled:text-empower-300 transition-shadow"
             />
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
-              className="px-6 py-3 bg-indigo-600 text-white rounded-full font-medium hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-3 bg-empower-500 text-white rounded-full font-medium hover:bg-empower-600 disabled:bg-empower-200 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
               Send
             </button>
           </div>
-          <p className="text-xs text-slate-400 text-center mt-2">
+          <p className="text-xs text-empower-400 text-center mt-2">
             Educational information only. Not medical advice.
           </p>
         </form>

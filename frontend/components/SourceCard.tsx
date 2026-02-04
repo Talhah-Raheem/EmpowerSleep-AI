@@ -22,10 +22,10 @@ export function SourceCard({ source }: SourceCardProps) {
         href={formatted.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-start gap-2 p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors border border-slate-200"
+        className="flex items-start gap-2 p-3 rounded-lg bg-empower-50 hover:bg-empower-100 transition-colors border border-empower-100"
       >
         <span className="text-lg">{formatted.icon}</span>
-        <span className="text-sm text-blue-600 hover:underline">
+        <span className="text-sm text-empower-600 hover:underline">
           {formatted.text}
         </span>
       </a>
@@ -34,15 +34,15 @@ export function SourceCard({ source }: SourceCardProps) {
 
   // Textbook source - render as static card
   return (
-    <div className="flex items-start gap-2 p-3 rounded-lg bg-indigo-50 border border-indigo-100">
+    <div className="flex items-start gap-2 p-3 rounded-lg bg-empower-50 border border-empower-100">
       <span className="text-lg">{formatted.icon}</span>
-      <span className="text-sm text-slate-700">
+      <span className="text-sm text-empower-700">
         <strong>{source.title}</strong>
         {source.chapter && (
-          <span className="text-slate-600"> – {source.chapter}</span>
+          <span className="text-empower-600"> – {source.chapter}</span>
         )}
         {source.page_start !== undefined && (
-          <span className="text-slate-500">
+          <span className="text-empower-500">
             {' '}
             ({source.page_end && source.page_end !== source.page_start
               ? `pp. ${source.page_start}–${source.page_end}`
@@ -67,9 +67,9 @@ export function SourceList({ sources }: SourceListProps) {
   return (
     <div className="mt-3">
       <details className="group">
-        <summary className="cursor-pointer text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1">
+        <summary className="cursor-pointer text-sm text-empower-500 hover:text-empower-700 flex items-center gap-1">
           <span className="group-open:rotate-90 transition-transform">▶</span>
-          <span>📚 Sources ({sources.length})</span>
+          <span>Sources ({sources.length})</span>
         </summary>
         <div className="mt-2 space-y-2">
           {sources.map((source, index) => (
