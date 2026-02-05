@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Open_Sans, Poppins } from 'next/font/google'
+import { ThemeProvider } from 'next-themes'
 import './globals.css'
 
 const openSans = Open_Sans({
@@ -30,8 +31,12 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className={`${openSans.variable} ${poppins.variable} font-sans`}>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${openSans.variable} ${poppins.variable} font-sans`}>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   )
 }

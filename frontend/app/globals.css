@@ -20,6 +20,14 @@
   background-color: #9ab8c5; /* empower-300 */
 }
 
+.dark .chat-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #3d525e; /* empower-700 */
+}
+
+.dark .chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #4a6573; /* empower-600 */
+}
+
 /* Smooth animations */
 @keyframes fadeIn {
   from {
@@ -120,7 +128,15 @@
   border-color: #e1eaee; /* empower-100 */
 }
 
+.dark .prose-chat hr {
+  border-color: #3d525e; /* empower-700 */
+}
+
 .prose-chat em {
   color: #7a9dac; /* empower-400 */
   font-size: 0.875rem;
+}
+
+.dark .prose-chat em {
+  color: #9ab8c5; /* empower-300 */
 }

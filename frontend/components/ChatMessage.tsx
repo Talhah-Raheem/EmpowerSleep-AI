@@ -33,14 +33,14 @@ export function ChatMessage({ message }: ChatMessageProps) {
         className={`relative max-w-[85%] md:max-w-[75%] ${
           isUser
             ? 'bg-empower-500 text-white rounded-2xl rounded-br-md shadow-sm'
-            : 'group bg-white border border-empower-100 rounded-2xl rounded-bl-md shadow-sm'
+            : 'group bg-white dark:bg-empower-800 border border-empower-100 dark:border-empower-700 rounded-2xl rounded-bl-md shadow-sm'
         } px-4 py-3 ${!isUser ? 'pr-9' : ''}`}
       >
         {/* Copy button (assistant messages only) */}
         {!isUser && (
           <button
             onClick={handleCopy}
-            className="absolute top-2 right-2 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity text-empower-300 hover:text-empower-600 hover:bg-empower-50"
+            className="absolute top-2 right-2 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity text-empower-300 dark:text-empower-500 hover:text-empower-600 dark:hover:text-empower-300 hover:bg-empower-50 dark:hover:bg-empower-700"
             title="Copy message"
           >
             {copied ? (
@@ -57,7 +57,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
         )}
 
         {/* Message content */}
-        <div className={`prose-chat ${isUser ? 'text-white' : 'text-empower-800'}`}>
+        <div className={`prose-chat ${isUser ? 'text-white' : 'text-empower-800 dark:text-empower-100'}`}>
           {isUser ? (
             // User messages - plain text
             <p>{message.content}</p>
@@ -71,16 +71,16 @@ export function ChatMessage({ message }: ChatMessageProps) {
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-empower-600 hover:text-empower-700 hover:underline"
+                    className="text-empower-600 dark:text-empower-400 hover:text-empower-700 dark:hover:text-empower-300 hover:underline"
                   >
                     {children}
                   </a>
                 ),
                 // Style horizontal rules (disclaimer separator)
-                hr: () => <hr className="my-3 border-empower-100" />,
+                hr: () => <hr className="my-3 border-empower-100 dark:border-empower-700" />,
                 // Style emphasis (disclaimer text)
                 em: ({ children }) => (
-                  <em className="text-empower-400 text-sm not-italic">{children}</em>
+                  <em className="text-empower-400 dark:text-empower-500 text-sm not-italic">{children}</em>
                 ),
               }}
             >
@@ -104,11 +104,11 @@ export function ChatMessage({ message }: ChatMessageProps) {
 export function LoadingMessage() {
   return (
     <div className="flex justify-start animate-fade-in">
-      <div className="bg-white border border-empower-100 rounded-2xl rounded-bl-md shadow-sm px-4 py-3">
+      <div className="bg-white dark:bg-empower-800 border border-empower-100 dark:border-empower-700 rounded-2xl rounded-bl-md shadow-sm px-4 py-3">
         <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-empower-300 rounded-full loading-dot" />
-          <div className="w-2 h-2 bg-empower-300 rounded-full loading-dot" />
-          <div className="w-2 h-2 bg-empower-300 rounded-full loading-dot" />
+          <div className="w-2 h-2 bg-empower-300 dark:bg-empower-500 rounded-full loading-dot" />
+          <div className="w-2 h-2 bg-empower-300 dark:bg-empower-500 rounded-full loading-dot" />
+          <div className="w-2 h-2 bg-empower-300 dark:bg-empower-500 rounded-full loading-dot" />
         </div>
       </div>
     </div>

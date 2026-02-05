@@ -22,10 +22,10 @@ export function SourceCard({ source }: SourceCardProps) {
         href={formatted.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-start gap-2 p-3 rounded-lg bg-empower-50 hover:bg-empower-100 transition-colors border border-empower-100"
+        className="flex items-start gap-2 p-3 rounded-lg bg-empower-50 dark:bg-empower-700 hover:bg-empower-100 dark:hover:bg-empower-600 transition-colors border border-empower-100 dark:border-empower-600"
       >
         <span className="text-lg">{formatted.icon}</span>
-        <span className="text-sm text-empower-600 hover:underline">
+        <span className="text-sm text-empower-600 dark:text-empower-300 hover:underline">
           {formatted.text}
         </span>
       </a>
@@ -34,12 +34,12 @@ export function SourceCard({ source }: SourceCardProps) {
 
   // Textbook source - render as static card
   return (
-    <div className="flex items-start gap-2 p-3 rounded-lg bg-empower-50 border border-empower-100">
+    <div className="flex items-start gap-2 p-3 rounded-lg bg-empower-50 dark:bg-empower-700 border border-empower-100 dark:border-empower-600">
       <span className="text-lg">{formatted.icon}</span>
-      <span className="text-sm text-empower-700">
+      <span className="text-sm text-empower-700 dark:text-empower-200">
         <strong>{source.title}</strong>
         {source.chapter && (
-          <span className="text-empower-600"> – {source.chapter}</span>
+          <span className="text-empower-600 dark:text-empower-400"> – {source.chapter}</span>
         )}
         {source.page_start !== undefined && (
           <span className="text-empower-500">
@@ -67,7 +67,7 @@ export function SourceList({ sources }: SourceListProps) {
   return (
     <div className="mt-3">
       <details className="group">
-        <summary className="cursor-pointer text-sm text-empower-500 hover:text-empower-700 flex items-center gap-1">
+        <summary className="cursor-pointer text-sm text-empower-500 dark:text-empower-400 hover:text-empower-700 dark:hover:text-empower-300 flex items-center gap-1">
           <span className="group-open:rotate-90 transition-transform">▶</span>
           <span>Sources ({sources.length})</span>
         </summary>
