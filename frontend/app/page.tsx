@@ -31,7 +31,7 @@ export default function ChatPage() {
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Auto-scroll to bottom when messages change
@@ -53,9 +53,10 @@ export default function ChatPage() {
     const trimmedInput = input.trim();
     if (!trimmedInput || isLoading) return;
 
-    // Clear input and error
+    // Clear input and error, reset textarea height
     setInput('');
     setError(null);
+    if (inputRef.current) inputRef.current.style.height = 'auto';
 
     // Create new AbortController for this request
     abortControllerRef.current = new AbortController();
@@ -204,15 +205,30 @@ export default function ChatPage() {
       {/* Input area */}
       <footer className="bg-white border-t border-empower-100 px-4 py-4 shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
         <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
-          <div className="flex gap-3">
-            <input
+          <div className="flex gap-3 items-end">
+            <textarea
               ref={inputRef}
-              type="text"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                e.target.style.height = 'auto';
+                const newHeight = Math.min(e.target.scrollHeight, 96);
+                e.target.style.height = newHeight + 'px';
+                e.target.style.overflowY = e.target.scrollHeight > 96 ? 'auto' : 'hidden';
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (input.trim() && !isLoading) {
+                    handleSubmit(e as unknown as FormEvent);
+                  }
+                }
+              }}
               placeholder="Ask me about sleep..."
               disabled={isLoading}
-              className="flex-1 px-5 py-3 rounded-full border border-empower-200 focus:outline-none focus:ring-2 focus:ring-empower-400 focus:border-transparent disabled:bg-empower-50 disabled:text-empower-300 transition-shadow"
+              rows={1}
+              className="flex-1 px-5 py-3 rounded-2xl border border-empower-200 focus:outline-none focus:ring-2 focus:ring-empower-400 focus:border-transparent disabled:bg-empower-50 disabled:text-empower-300 transition-shadow resize-none overflow-hidden"
+              style={{ maxHeight: '96px' }}
             />
             <button
               type="submit"
