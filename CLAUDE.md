@@ -234,26 +234,24 @@ Both frontend and backend are deployed on Railway as separate services.
 1. In Railway service settings → Domains
 2. Add custom domain and configure DNS
 
-## Future Enhancements
+## Completed Enhancements
+- [x] Add favicon (EmpowerSleep logo in layout.tsx)
+- [x] Branded loading animation (SleepLoader with zzz + sleep thoughts)
+- [x] Smooth scrolling (scrollIntoView in page.tsx)
 
-### Quick Wins
-- [ ] Add favicon (use EmpowerSleep logo)
-- [ ] "EmpowerSleep is typing..." indicator
+## Planned Enhancements
+
+### UI & UX
 - [ ] Copy button on assistant messages
-
-### UX Improvements
 - [ ] Feedback buttons (thumbs up/down) on responses
 - [ ] Follow-up question suggestions after each answer
-- [ ] Keyboard shortcuts (Enter to send, Shift+Enter for newline)
+- [ ] Keyboard shortcuts (Shift+Enter for newline)
 - [ ] Dark mode support
 
-### Trust & Polish
-- [ ] "Powered by EmpowerSleep" footer with link to main site
-- [ ] Loading skeleton for faster perceived speed
-- [ ] Improved smooth scrolling
-
-### Bigger Features
-- [ ] Voice input for questions
+### Export & Sharing
 - [ ] Export conversation as PDF
 - [ ] Shareable conversation links
+
+### Bigger Features
 - [ ] Guided sleep assessment questionnaire mode
+- [ ] Voice conversations (voice input + AI voice output, full conversational mode — do last)
