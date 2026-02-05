@@ -178,3 +178,82 @@ Edit `TOP_K_RESULTS` in `rag/chat_engine.py`
 
 ### Modify LLM behavior
 Edit `SYSTEM_PROMPT` in `rag/chat_engine.py`
+
+## Deployment (Railway)
+
+Both frontend and backend are deployed on Railway as separate services.
+
+### Prerequisites
+- Railway account (railway.app)
+- GitHub repo with code pushed
+- `rag_artifacts/` folder committed (contains FAISS index)
+
+### Step 1: Create Railway Project
+1. Go to railway.app → New Project → Deploy from GitHub
+2. Select your repository
+3. This creates the first service (backend by default)
+
+### Step 2: Configure Backend Service
+1. In Railway dashboard, click on the service
+2. Go to Settings → change name to "backend"
+3. Add environment variables:
+   - `OPENAI_API_KEY` = your OpenAI key
+   - `CORS_ORIGINS` = (leave empty for now, add frontend URL later)
+4. Railway auto-detects Python from `requirements.txt` and uses `Procfile`
+5. Deploy and copy the generated URL (e.g., `https://backend-xxx.up.railway.app`)
+
+### Step 3: Add Frontend Service
+1. In Railway project, click "New" → "GitHub Repo" → same repo
+2. Go to Settings:
+   - Change name to "frontend"
+   - Set Root Directory to `frontend`
+3. Add environment variable:
+   - `NEXT_PUBLIC_API_BASE_URL` = backend URL from Step 2
+4. Deploy and copy the frontend URL
+
+### Step 4: Update Backend CORS
+1. Go back to backend service in Railway
+2. Add environment variable:
+   - `CORS_ORIGINS` = frontend URL (e.g., `https://frontend-xxx.up.railway.app`)
+3. Redeploy backend
+
+### Environment Variables Summary
+
+**Backend Service:**
+| Variable | Value |
+|----------|-------|
+| `OPENAI_API_KEY` | sk-... |
+| `CORS_ORIGINS` | https://frontend-xxx.up.railway.app |
+
+**Frontend Service:**
+| Variable | Value |
+|----------|-------|
+| `NEXT_PUBLIC_API_BASE_URL` | https://backend-xxx.up.railway.app |
+
+### Custom Domain (Optional)
+1. In Railway service settings → Domains
+2. Add custom domain and configure DNS
+
+## Future Enhancements
+
+### Quick Wins
+- [ ] Add favicon (use EmpowerSleep logo)
+- [ ] "EmpowerSleep is typing..." indicator
+- [ ] Copy button on assistant messages
+
+### UX Improvements
+- [ ] Feedback buttons (thumbs up/down) on responses
+- [ ] Follow-up question suggestions after each answer
+- [ ] Keyboard shortcuts (Enter to send, Shift+Enter for newline)
+- [ ] Dark mode support
+
+### Trust & Polish
+- [ ] "Powered by EmpowerSleep" footer with link to main site
+- [ ] Loading skeleton for faster perceived speed
+- [ ] Improved smooth scrolling
+
+### Bigger Features
+- [ ] Voice input for questions
+- [ ] Export conversation as PDF
+- [ ] Shareable conversation links
+- [ ] Guided sleep assessment questionnaire mode

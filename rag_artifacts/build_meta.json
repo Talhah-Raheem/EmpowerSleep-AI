@@ -1,0 +1,11 @@
+{
+  "build_timestamp": "2026-01-28T21:41:05.856462Z",
+  "source_file": "/Users/talhah/Documents/EMPOWERSLEEP/data/blog_docs.jsonl",
+  "num_articles": 90,
+  "num_chunks": 148,
+  "embedding_model": "text-embedding-3-small",
+  "embedding_dimension": 1536,
+  "chunk_target_words": 1000,
+  "chunk_overlap_words": 150,
+  "faiss_index_type": "IndexFlatIP (cosine similarity)"
+}

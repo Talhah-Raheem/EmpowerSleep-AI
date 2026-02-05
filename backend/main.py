@@ -15,6 +15,7 @@ Or from project root:
     python -m uvicorn backend.main:app --reload --port 8000
 """
 
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -85,12 +86,18 @@ app = FastAPI(
 
 # CORS configuration
 # Allow requests from local development and production frontend
+# Additional origins can be added via CORS_ORIGINS env var (comma-separated)
 ALLOWED_ORIGINS = [
     "http://localhost:3000",      # Next.js dev server
     "http://127.0.0.1:3000",
-    "https://empowersleep.com",   # Production placeholder
+    "https://empowersleep.com",
     "https://www.empowersleep.com",
 ]
+
+# Add origins from environment variable (for Railway deployment)
+extra_origins = os.getenv("CORS_ORIGINS", "")
+if extra_origins:
+    ALLOWED_ORIGINS.extend([origin.strip() for origin in extra_origins.split(",")])
 
 app.add_middleware(
     CORSMiddleware,

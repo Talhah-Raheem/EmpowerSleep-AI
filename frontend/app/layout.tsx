@@ -18,6 +18,10 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   title: 'EmpowerSleep - Sleep Education Assistant',
   description: 'Sleep care, simplified. Get answers to your sleep questions with AI-powered education grounded in expert content.',
+  icons: {
+    icon: '/empower_sleep_logo.jpeg',
+    apple: '/empower_sleep_logo.jpeg',
+  },
 }
 
 export default function RootLayout({

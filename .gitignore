@@ -25,8 +25,9 @@ venv/
 # Generated data (rebuild with scrape_empowersleep_blog.py)
 data/blog_docs.jsonl
 
-# RAG artifacts (rebuild with build_blog_index.py)
-rag_artifacts/
+# RAG artifacts - COMMITTED for deployment
+# To rebuild: python scripts/build_blog_index.py
+# rag_artifacts/
 
 # OS files
 .DS_Store

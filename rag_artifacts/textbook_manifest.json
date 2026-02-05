@@ -1,0 +1,11 @@
+{
+  "documents": {
+    "148b956746923d19f6adf1d819224620740c10a5137973776dc0a03b60938db9": {
+      "book_title": "Sleep and Health",
+      "version": "v1",
+      "pdf_path": "/Users/talhah/Documents/EMPOWERSLEEP/data/raw/Sleep_And_Health.pdf",
+      "num_chunks": 154,
+      "indexed_at": "2026-01-29T01:15:25.391559Z"
+    }
+  }
+}
