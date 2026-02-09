@@ -239,19 +239,19 @@ Both frontend and backend are deployed on Railway as separate services.
 - [x] Branded loading animation (SleepLoader with zzz + sleep thoughts)
 - [x] Smooth scrolling (scrollIntoView in page.tsx)
 
+## Completed Enhancements
+- [x] Copy button on assistant messages
+- [x] Keyboard shortcuts (Shift+Enter for newline, Enter to send)
+- [x] Dark mode support (system preference + manual toggle)
+
 ## Planned Enhancements
 
-### UI & UX
-- [ ] Copy button on assistant messages
+### Needs Database (set up PostgreSQL on Railway first)
+- [ ] Set up PostgreSQL database on Railway
 - [ ] Feedback buttons (thumbs up/down) on responses
-- [ ] Follow-up question suggestions after each answer
-- [ ] Keyboard shortcuts (Shift+Enter for newline)
-- [ ] Dark mode support
-
-### Export & Sharing
-- [ ] Export conversation as PDF
 - [ ] Shareable conversation links
-
-### Bigger Features
-- [ ] Guided sleep assessment questionnaire mode
 - [ ] Voice conversations (voice input + AI voice output, full conversational mode — do last)
+
+### No Database Required
+- [ ] Export conversation as PDF
+- [ ] Guided sleep assessment questionnaire mode
