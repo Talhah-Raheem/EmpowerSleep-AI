@@ -379,24 +379,34 @@ class ChatEngine:
         """
         Build a smarter search query using conversation context.
 
-        If this is a follow-up message, combines original topic with current
-        message for better retrieval.
+        If this is a follow-up message, uses the assistant's last follow-up
+        question (if any) combined with the original topic for better retrieval.
         """
         if not history:
             return current_message
 
-        # Find the original user question
+        # Find the original user question and last assistant message
         original_question = None
+        last_assistant_msg = None
         for msg in history:
-            if msg.get("role") == "user":
+            if msg.get("role") == "user" and original_question is None:
                 original_question = msg.get("content", "")
-                break
+            if msg.get("role") == "assistant":
+                last_assistant_msg = msg.get("content", "")
 
         if not original_question:
             return current_message
 
-        # If current message is short (likely a clarifying answer), combine
-        if len(current_message.split()) <= 10:
+        # If current message is short (likely a clarifying answer or affirmation),
+        # use the assistant's follow-up question to retrieve more relevant chunks
+        if len(current_message.split()) <= 10 and last_assistant_msg:
+            # Strip disclaimer before extracting follow-up
+            clean = last_assistant_msg.split("---")[0].strip()
+            # If the assistant asked a follow-up question, use it for search
+            if "?" in clean:
+                last_question = clean.rsplit("?", 1)[0].rsplit(".", 1)[-1].strip()
+                if last_question:
+                    return f"{original_question} {last_question}"
             return f"{original_question} {current_message}"
 
         return current_message

@@ -238,20 +238,33 @@ Both frontend and backend are deployed on Railway as separate services.
 - [x] Add favicon (EmpowerSleep logo in layout.tsx)
 - [x] Branded loading animation (SleepLoader with zzz + sleep thoughts)
 - [x] Smooth scrolling (scrollIntoView in page.tsx)
+- [x] Copy button on assistant messages (ChatMessage.tsx)
+- [x] Keyboard shortcuts — Shift+Enter for newline, Enter to send (page.tsx)
+- [x] Dark mode support — system preference + manual toggle via next-themes (layout.tsx, page.tsx)
+- [x] Off-topic question handling — AI bridges non-sleep questions back to sleep education (chat_engine.py)
+- [x] CORS fix — allow_methods=["*"], allow_credentials=False (backend/main.py)
 
 ## Planned Enhancements
 
-### UI & UX
-- [ ] Copy button on assistant messages
+### Priority 1: Infrastructure
+- [ ] Set up PostgreSQL database on Railway (unblocks feedback, shareable links, analytics)
+- [ ] Auto blog sync — automatically scrape & re-index when new blogs are published on empowersleep.com (GitHub Actions cron or webhook)
+
+### Priority 2: Needs Database
 - [ ] Feedback buttons (thumbs up/down) on responses
-- [ ] Follow-up question suggestions after each answer
-- [ ] Keyboard shortcuts (Shift+Enter for newline)
-- [ ] Dark mode support
-
-### Export & Sharing
-- [ ] Export conversation as PDF
 - [ ] Shareable conversation links
+- [ ] Analytics dashboard — track most asked questions, popular topics
 
-### Bigger Features
+### Priority 3: No Database Required
+- [ ] Export conversation as PDF
+- [ ] Streaming responses — show AI answer word-by-word via Server-Sent Events
 - [ ] Guided sleep assessment questionnaire mode
-- [ ] Voice conversations (voice input + AI voice output, full conversational mode — do last)
+- [ ] Sleep tip of the day on welcome screen
+- [ ] Conversation starters by category (tabs: Sleep Basics, Sleep Problems, Lifestyle)
+- [ ] Message timestamps
+- [ ] PWA support — make installable as app on phones
+- [ ] Rate limiting — prevent abuse of OpenAI API
+
+### Priority 4: Bigger Features (do last)
+- [ ] Voice conversations (voice input + AI voice output, full conversational mode)
+- [ ] Confidence indicator — visual cue for how well-supported the answer is by sources
