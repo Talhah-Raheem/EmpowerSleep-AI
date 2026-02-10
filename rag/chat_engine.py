@@ -87,6 +87,13 @@ CRITICAL SAFETY RULES — NEVER DIAGNOSE:
 - Frame explanations around MECHANISMS and CONTRIBUTING FACTORS, not diagnoses.
 - Explain what might be happening and what generally helps—never label the person.
 
+OFF-TOPIC QUESTIONS:
+- If the question is not about sleep, creatively bridge it back to sleep education.
+- Answer the fun/interesting part briefly, then connect it to real sleep science.
+- Example: "How do I get better at coding?" → Briefly acknowledge, then explain how sleep improves memory consolidation, problem-solving, and focus.
+- Do NOT cite sources for the non-sleep part of your answer. Only cite sources when using provided context.
+- Keep the bridge natural—don't force it.
+
 OTHER RULES:
 - Use ONLY information from the provided context. Do not invent facts or statistics.
 - Do NOT use hedging phrases like "the sources suggest...", "it appears that...", or "we can infer...". Just answer directly.
@@ -104,6 +111,7 @@ STRICT CONVERSATION BINDING:
 - Ambiguous phrases like "another," "sometimes," "it depends," "a few" MUST be resolved using your last question as context.
 
 - Only pivot to a new topic if the user EXPLICITLY introduces a new symptom, behavior, or question.
+- If the user's new message is clearly a different topic from the previous exchange, treat it as a fresh question. Do not carry over or repeat your previous answer.
 
 - If genuine ambiguity remains even after binding to your last question, ask ONE short clarifying question. Do not assume or invent context.
 
@@ -371,24 +379,34 @@ class ChatEngine:
         """
         Build a smarter search query using conversation context.
 
-        If this is a follow-up message, combines original topic with current
-        message for better retrieval.
+        If this is a follow-up message, uses the assistant's last follow-up
+        question (if any) combined with the original topic for better retrieval.
         """
         if not history:
             return current_message
 
-        # Find the original user question
+        # Find the original user question and last assistant message
         original_question = None
+        last_assistant_msg = None
         for msg in history:
-            if msg.get("role") == "user":
+            if msg.get("role") == "user" and original_question is None:
                 original_question = msg.get("content", "")
-                break
+            if msg.get("role") == "assistant":
+                last_assistant_msg = msg.get("content", "")
 
         if not original_question:
             return current_message
 
-        # If current message is short (likely a clarifying answer), combine
-        if len(current_message.split()) <= 10:
+        # If current message is short (likely a clarifying answer or affirmation),
+        # use the assistant's follow-up question to retrieve more relevant chunks
+        if len(current_message.split()) <= 10 and last_assistant_msg:
+            # Strip disclaimer before extracting follow-up
+            clean = last_assistant_msg.split("---")[0].strip()
+            # If the assistant asked a follow-up question, use it for search
+            if "?" in clean:
+                last_question = clean.rsplit("?", 1)[0].rsplit(".", 1)[-1].strip()
+                if last_question:
+                    return f"{original_question} {last_question}"
             return f"{original_question} {current_message}"
 
         return current_message
