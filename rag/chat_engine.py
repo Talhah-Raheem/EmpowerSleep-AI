@@ -554,28 +554,3 @@ Instructions:
             "unique_articles": len(unique_urls),
             "unique_books": len(unique_books),
         }
-
-
-# =============================================================================
-# CONVENIENCE FUNCTION
-# =============================================================================
-
-# Global engine instance for simple usage
-_engine: Optional[ChatEngine] = None
-
-
-def ask_question(user_message: str, history: Optional[list[dict]] = None) -> tuple[str, list[dict]]:
-    """
-    Convenience function to ask a question without managing ChatEngine instance.
-
-    Args:
-        user_message: The user's question
-        history: Optional conversation history
-
-    Returns:
-        tuple[str, list[dict]]: (answer, sources)
-    """
-    global _engine
-    if _engine is None:
-        _engine = ChatEngine()
-    return _engine.ask_question(user_message, history)

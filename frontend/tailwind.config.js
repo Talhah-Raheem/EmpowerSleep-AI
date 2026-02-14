@@ -21,14 +21,6 @@ module.exports = {
           800: '#344550',
           900: '#2d3b44',
         },
-        // Accent teal for CTAs
-        accent: {
-          50: '#f0fdfa',
-          100: '#ccfbf1',
-          500: '#14b8a6',
-          600: '#0d9488',
-          700: '#0f766e',
-        },
       },
       fontFamily: {
         sans: ['Open Sans', 'system-ui', 'sans-serif'],

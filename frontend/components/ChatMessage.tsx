@@ -97,20 +97,3 @@ export function ChatMessage({ message }: ChatMessageProps) {
     </div>
   );
 }
-
-/**
- * LoadingMessage component displays typing indicator while waiting for response.
- */
-export function LoadingMessage() {
-  return (
-    <div className="flex justify-start animate-fade-in">
-      <div className="bg-white dark:bg-empower-800 border border-empower-100 dark:border-empower-700 rounded-2xl rounded-bl-md shadow-sm px-4 py-3">
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-empower-300 dark:bg-empower-500 rounded-full loading-dot" />
-          <div className="w-2 h-2 bg-empower-300 dark:bg-empower-500 rounded-full loading-dot" />
-          <div className="w-2 h-2 bg-empower-300 dark:bg-empower-500 rounded-full loading-dot" />
-        </div>
-      </div>
-    </div>
-  );
-}

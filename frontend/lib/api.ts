@@ -75,22 +75,6 @@ export async function sendMessage(
 }
 
 /**
- * Check the health status of the API.
- *
- * @returns Promise<boolean> - True if API is healthy
- */
-export async function checkHealth(): Promise<boolean> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/health`);
-    if (!response.ok) return false;
-    const data = await response.json();
-    return data.status === 'healthy';
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Format a source for display.
  *
  * Textbook: 📖 **Title** – Chapter X (pp. Y–Z)

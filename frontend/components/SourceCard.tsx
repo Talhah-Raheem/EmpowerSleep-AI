@@ -1,6 +1,7 @@
 'use client';
 
 import { Source, formatSourceDisplay } from '@/lib/api';
+import { EmpowerLogo } from './EmpowerLogo';
 
 interface SourceCardProps {
   source: Source;
@@ -24,7 +25,7 @@ export function SourceCard({ source }: SourceCardProps) {
         rel="noopener noreferrer"
         className="flex items-start gap-2 p-3 rounded-lg bg-empower-50 dark:bg-empower-700 hover:bg-empower-100 dark:hover:bg-empower-600 transition-colors border border-empower-100 dark:border-empower-600"
       >
-        <span className="text-lg">{formatted.icon}</span>
+        <EmpowerLogo className="h-5 w-5 shrink-0 text-empower-500 dark:text-empower-400" />
         <span className="text-sm text-empower-600 dark:text-empower-300 hover:underline">
           {formatted.text}
         </span>
