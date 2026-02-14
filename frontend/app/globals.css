@@ -66,9 +66,49 @@
   animation-delay: -0.16s;
 }
 
+/* Sleep loader logo — top and bottom pieces breathe independently
+ * Top floats up, bottom floats down, then they come back together.
+ * Each piece gets a blue inner glow at peak expansion.
+ */
+.logo-top-breathe,
+.logo-bottom-breathe {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.logo-top-breathe {
+  animation: logoTopBreathe 3s ease-in-out infinite;
+}
+
+.logo-bottom-breathe {
+  animation: logoBottomBreathe 3s ease-in-out infinite;
+}
+
+@keyframes logoTopBreathe {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 0 0px rgba(100, 175, 255, 0));
+  }
+  50% {
+    transform: translateY(-4px) scale(1.06);
+    filter: drop-shadow(0 0 8px rgba(100, 175, 255, 0.7));
+  }
+}
+
+@keyframes logoBottomBreathe {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 0 0px rgba(100, 175, 255, 0));
+  }
+  50% {
+    transform: translateY(3px) scale(1.04);
+    filter: drop-shadow(0 0 8px rgba(100, 175, 255, 0.7));
+  }
+}
+
 /* Sleep loader "zzz" animation
- * Creates a gentle floating effect for the z characters.
- * Each z has a staggered delay for a cascading appearance.
+ * Synced to the same 3s cycle as the logo breathing.
+ * The z's cascade out as the logo reaches peak expansion.
  */
 @keyframes zzzFloat {
   0%, 100% {
@@ -83,12 +123,12 @@
 
 .zzz-float {
   display: inline-block;
-  animation: zzzFloat 2s ease-in-out infinite;
+  animation: zzzFloat 3s ease-in-out infinite;
   font-weight: 600;
   font-style: italic;
 }
 
-/* Staggered delays for each z - creates a gentle wave effect */
+/* Synced to 3s logo cycle with small cascade */
 .zzz-1 {
   animation-delay: 0s;
 }

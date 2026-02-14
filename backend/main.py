@@ -33,7 +33,7 @@ from dotenv import load_dotenv
 load_dotenv(PROJECT_ROOT / ".env")
 
 # Import the chat engine
-from rag.chat_engine import ChatEngine, ask_question
+from rag.chat_engine import ChatEngine
 
 
 # =============================================================================

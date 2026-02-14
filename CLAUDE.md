@@ -234,24 +234,30 @@ Both frontend and backend are deployed on Railway as separate services.
 1. In Railway service settings → Domains
 2. Add custom domain and configure DNS
 
-## Completed Enhancements
-- [x] Add favicon (EmpowerSleep logo in layout.tsx)
-- [x] Branded loading animation (SleepLoader with zzz + sleep thoughts)
-- [x] Smooth scrolling (scrollIntoView in page.tsx)
-
 ## Planned Enhancements
 
-### UI & UX
-- [ ] Copy button on assistant messages
-- [ ] Feedback buttons (thumbs up/down) on responses
+### No Database Required
 - [ ] Follow-up question suggestions after each answer
-- [ ] Keyboard shortcuts (Shift+Enter for newline)
-- [ ] Dark mode support
+- [ ] Export conversation as PDF (client-side rendering)
+- [ ] Guided sleep assessment questionnaire mode (hardcoded question flow)
 
-### Export & Sharing
-- [ ] Export conversation as PDF
+### Requires Database
+- [ ] Feedback buttons (thumbs up/down) with storage
 - [ ] Shareable conversation links
+- [ ] User accounts / saved conversation history
 
 ### Bigger Features
-- [ ] Guided sleep assessment questionnaire mode
 - [ ] Voice conversations (voice input + AI voice output, full conversational mode — do last)
+
+## Structure for Growth
+
+### Must-haves Before Going Public
+- [ ] **Privacy Policy** page — required since user health-related questions are sent to OpenAI
+- [ ] **Terms of Service** page — legally protect the "not medical advice" disclaimer
+- [ ] **Cookie/consent banner** — needed if analytics are added
+
+### Infrastructure
+- [ ] **Database** (Supabase or Railway Postgres) — unlocks feedback storage, conversation history, shareable links, analytics
+- [ ] **Auth** (even optional/anonymous) — for user accounts, saved chats, usage limits
+- [ ] **Error monitoring** (Sentry free tier) — know when things break in production
+- [ ] **Analytics** (PostHog or Plausible free tier) — understand what users actually ask

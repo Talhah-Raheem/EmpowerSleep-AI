@@ -6,6 +6,7 @@ import { Message, sendMessage } from '@/lib/api';
 import { getRandomQuestions } from '@/lib/sampleQuestions';
 import { ChatMessage } from '@/components/ChatMessage';
 import { SleepLoader } from '@/components/SleepLoader';
+import { EmpowerLogo } from '@/components/EmpowerLogo';
 
 /**
  * Main chat page component.
@@ -136,11 +137,7 @@ export default function ChatPage() {
       {/* Header */}
       <header className="bg-white dark:bg-empower-800 border-b border-empower-100 dark:border-empower-700 px-4 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
-          <img
-            src="/empower_sleep_logo.jpeg"
-            alt="EmpowerSleep"
-            className="h-10 w-10 object-contain"
-          />
+          <EmpowerLogo className="h-10 w-10 text-empower-500 dark:text-empower-300" />
           <div>
             <h1 className="text-lg font-heading font-semibold text-empower-700 dark:text-empower-100">EmpowerSleep</h1>
             <p className="text-xs text-empower-400 dark:text-empower-500">Sleep care, simplified</p>
@@ -189,11 +186,7 @@ export default function ChatPage() {
           {/* Welcome message when empty */}
           {messages.length === 0 && (
             <div className="text-center py-12 animate-fade-in">
-              <img
-                src="/empower_sleep_logo.jpeg"
-                alt="EmpowerSleep"
-                className="h-20 w-20 mx-auto mb-4 object-contain"
-              />
+              <EmpowerLogo className="h-20 w-20 mx-auto mb-4 text-empower-500 dark:text-empower-300" />
               <h2 className="text-2xl font-heading font-semibold text-empower-700 dark:text-empower-100 mb-2">
                 Welcome to EmpowerSleep
               </h2>
