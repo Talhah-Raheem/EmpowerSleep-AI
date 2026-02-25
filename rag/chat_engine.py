@@ -48,18 +48,25 @@ EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSION = 1536
 
 # Retrieval configuration
-TOP_K_RESULTS = 4
+TOP_K_RESULTS = 6
 
 # LLM configuration
 LLM_MODEL = "gpt-4o-mini"
 LLM_TEMPERATURE = 0.3
-LLM_MAX_TOKENS = 600
+LLM_MAX_TOKENS = 750
 
 # Disclaimer appended to all responses
 DISCLAIMER_SUFFIX = "\n\n---\n*Educational information only. Not medical advice.*"
 
 # Maximum conversation history turns to include
 MAX_HISTORY_TURNS = 3
+
+# Signals that indicate a follow-up message referencing a prior topic
+FOLLOWUP_SIGNALS = {
+    "also", "and also", "what about", "how about", "additionally",
+    "on top of that", "besides", "along with", "as well", "in addition",
+    "another thing", "one more", "i also", "i have", "i'm also",
+}
 
 # System prompt for the LLM
 SYSTEM_PROMPT = """You are EmpowerSleep, a knowledgeable and supportive sleep education assistant.
@@ -69,6 +76,11 @@ YOUR COMMUNICATION STYLE:
 - Use a calm, warm, educational tone—like a trusted health educator.
 - Be clear and concise. Avoid jargon unless you explain it.
 - When helpful, include ONE simple, concrete example to illustrate a concept.
+
+DEPTH AND PROGRESSION:
+- In a multi-turn conversation, each response must add new information or go deeper than the previous response.
+- Do NOT restate or rephrase what you already said. Assume they read your previous answer.
+- When building on a prior answer, start from where you left off — advance the explanation, add a mechanism, a practical step, or a nuance.
 
 CRITICAL SAFETY RULES — NEVER DIAGNOSE:
 - NEVER state or imply the user has a medical condition.
@@ -87,6 +99,13 @@ CRITICAL SAFETY RULES — NEVER DIAGNOSE:
 - Frame explanations around MECHANISMS and CONTRIBUTING FACTORS, not diagnoses.
 - Explain what might be happening and what generally helps—never label the person.
 
+SYMPTOM–MECHANISM ALIGNMENT RULE:
+- Match your explanation to the DIRECTION and NATURE of the symptom the user described. Do not default to the most common textbook mechanism if it contradicts their reported pattern.
+- If the user's experience doesn't fit the primary mechanism in the context, acknowledge that nuance ("This is less typical but can occur when...") rather than overriding their experience with a generic explanation.
+- When physiological uncertainty exists, explain the range of contributing factors rather than committing to a specific pathway.
+- Never confidently assert a biological mechanism that conflicts with what the user has described experiencing.
+- This applies to any symptom domain — sleep, appetite, energy, mood, cognition, or physical sensation.
+
 OFF-TOPIC QUESTIONS:
 - If the question is not about sleep, creatively bridge it back to sleep education.
 - Answer the fun/interesting part briefly, then connect it to real sleep science.
@@ -98,6 +117,12 @@ OTHER RULES:
 - Use ONLY information from the provided context. Do not invent facts or statistics.
 - Do NOT use hedging phrases like "the sources suggest...", "it appears that...", or "we can infer...". Just answer directly.
 - Do NOT add a disclaimer—it will be added automatically at the end.
+
+MULTI-PART QUESTIONS AND PERSONAL CONTEXT:
+- If the user's message contains more than one distinct topic or question, address ALL of them. Do not silently omit one.
+- If one component has less supporting context, briefly acknowledge it and offer to go deeper — but do not skip it.
+- If the user volunteers personal context (e.g., "I have sleep apnea," "I work night shifts"), treat that as a fixed frame for the entire response. Weave it into your answer — do not ignore it.
+- Example: "I have sleep apnea and want an efficient morning routine" → address the morning routine AND acknowledge how sleep apnea affects morning recovery.
 
 IF THE CONTEXT DOESN'T FULLY ANSWER THE QUESTION:
 - Provide what IS relevant from the context.
@@ -398,16 +423,25 @@ class ChatEngine:
         if not original_question:
             return current_message
 
-        # If current message is short (likely a clarifying answer or affirmation),
-        # use the assistant's follow-up question to retrieve more relevant chunks
-        if len(current_message.split()) <= 10 and last_assistant_msg:
-            # Strip disclaimer before extracting follow-up
+        word_count = len(current_message.split())
+
+        # Path 1: Short messages (≤20 words) — affirmations, brief clarifications, short follow-ups
+        # Raised from 10 → 20 to catch medium-length follow-ups (e.g., 12-word messages)
+        if word_count <= 20 and last_assistant_msg:
             clean = last_assistant_msg.split("---")[0].strip()
-            # If the assistant asked a follow-up question, use it for search
             if "?" in clean:
                 last_question = clean.rsplit("?", 1)[0].rsplit(".", 1)[-1].strip()
                 if last_question:
                     return f"{original_question} {last_question}"
+            return f"{original_question} {current_message}"
+
+        # Path 2: Medium messages (21–40 words) with explicit continuation signals
+        current_lower = current_message.lower()
+        is_followup = (
+            word_count <= 40
+            and any(signal in current_lower for signal in FOLLOWUP_SIGNALS)
+        )
+        if is_followup:
             return f"{original_question} {current_message}"
 
         return current_message
@@ -428,13 +462,14 @@ class ChatEngine:
         embedding = embedding / np.linalg.norm(embedding)  # Normalize
         return embedding.reshape(1, -1)
 
-    def _retrieve_chunks(self, query: str, top_k: int = TOP_K_RESULTS) -> list[dict]:
+    def _retrieve_chunks(self, query: str, top_k: int = None) -> list[dict]:
         """
         Retrieve the most relevant chunks for a query using FAISS.
 
         Returns:
             list[dict]: Retrieved chunks with metadata and scores
         """
+        top_k = top_k or TOP_K_RESULTS
         index = _load_faiss_index()
         chunks = list(_load_chunks_metadata())
 
@@ -475,7 +510,6 @@ class ChatEngine:
             # Strip disclaimer from assistant messages
             if role == "ASSISTANT":
                 content = content.replace(DISCLAIMER_SUFFIX.strip(), "").strip()
-                content = content.replace("---\n*Educational information only. Not medical advice.*", "").strip()
             formatted.append(f"{role}: {content}")
 
         return "\n\n".join(formatted)
@@ -511,10 +545,10 @@ USER'S CURRENT MESSAGE: {query}
 Instructions:
 1. Answer directly and confidently—no hedging.
 2. NEVER diagnose or label the user with a condition. Use pattern-based, educational language instead.
-3. If a simple example would clarify, include one.
-4. **CRITICAL - CONVERSATION CONTINUITY**: If there is conversation history, the user's current message is a CONTINUATION of that conversation. Use their reply to REFINE your previous guidance on the ORIGINAL topic. Do NOT pivot to a new topic.
-5. If the user answered a clarifying question you asked, incorporate that information into a more tailored response about the ORIGINAL topic.
-6. Keep it concise and easy to read."""
+3. If the user's message contains multiple questions or topics, address ALL of them. If one has less context, acknowledge it briefly rather than skipping it.
+4. **CRITICAL - BUILD ON THE CONVERSATION, DO NOT REPEAT IT**: If there is conversation history, go DEEPER than your previous response — add new information, a mechanism, a practical step, or a nuance not yet covered. Do NOT restate or rephrase what you already told them.
+5. If the user answered a clarifying question, use their answer to ADVANCE into more specific, targeted guidance. Do not restart from a general overview.
+6. Keep it concise and easy to read. Short paragraphs or bullets are preferred."""
 
         response = self.client.chat.completions.create(
             model=LLM_MODEL,
