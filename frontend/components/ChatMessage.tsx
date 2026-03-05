@@ -7,6 +7,8 @@ import { SourceList } from './SourceCard';
 
 interface ChatMessageProps {
   message: Message;
+  streaming?: boolean;
+  onRegenerate?: () => void;
 }
 
 /**
@@ -15,7 +17,7 @@ interface ChatMessageProps {
  * - User messages: right-aligned, blue bubble
  * - Assistant messages: left-aligned, gray bubble with sources
  */
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({ message, streaming, onRegenerate }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
 
@@ -63,35 +65,57 @@ export function ChatMessage({ message }: ChatMessageProps) {
             <p>{message.content}</p>
           ) : (
             // Assistant messages - render markdown
-            <ReactMarkdown
-              components={{
-                // Style links
-                a: ({ href, children }) => (
-                  <a
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-empower-600 dark:text-empower-400 hover:text-empower-700 dark:hover:text-empower-300 hover:underline"
-                  >
-                    {children}
-                  </a>
-                ),
-                // Style horizontal rules (disclaimer separator)
-                hr: () => <hr className="my-3 border-empower-100 dark:border-empower-700" />,
-                // Style emphasis (disclaimer text)
-                em: ({ children }) => (
-                  <em className="text-empower-400 dark:text-empower-500 text-sm not-italic">{children}</em>
-                ),
-              }}
-            >
-              {message.content}
-            </ReactMarkdown>
+            <>
+              <ReactMarkdown
+                components={{
+                  // Style links
+                  a: ({ href, children }) => (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-empower-600 dark:text-empower-400 hover:text-empower-700 dark:hover:text-empower-300 hover:underline"
+                    >
+                      {children}
+                    </a>
+                  ),
+                  // Style horizontal rules (disclaimer separator)
+                  hr: () => <hr className="my-3 border-empower-100 dark:border-empower-700" />,
+                  // Style emphasis (disclaimer text)
+                  em: ({ children }) => (
+                    <em className="text-empower-400 dark:text-empower-500 text-sm not-italic">{children}</em>
+                  ),
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
+              {streaming && (
+                <span className="inline-block w-[2px] h-[1em] bg-empower-500 dark:bg-empower-300 ml-0.5 align-middle animate-blink" />
+              )}
+            </>
           )}
         </div>
 
         {/* Sources (assistant messages only) */}
         {!isUser && message.sources && message.sources.length > 0 && (
           <SourceList sources={message.sources} />
+        )}
+
+        {/* Regenerate button */}
+        {!isUser && onRegenerate && !streaming && (
+          <div className="mt-2 flex justify-end">
+            <button
+              onClick={onRegenerate}
+              title="Regenerate response"
+              className="flex items-center gap-1 text-xs text-empower-400 dark:text-empower-500 hover:text-empower-600 dark:hover:text-empower-300 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+              Regenerate
+            </button>
+          </div>
         )}
       </div>
     </div>

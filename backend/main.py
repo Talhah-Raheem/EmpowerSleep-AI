@@ -15,6 +15,7 @@ Or from project root:
     python -m uvicorn backend.main:app --reload --port 8000
 """
 
+import json as json_module
 import os
 import sys
 from pathlib import Path
@@ -22,6 +23,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 # Add project root to path for imports
@@ -204,6 +206,47 @@ async def chat(request: ChatMessage):
             status_code=500,
             detail=f"Internal error: {str(e)}"
         )
+
+
+@app.post("/chat/stream", tags=["Chat"])
+async def chat_stream(request: ChatMessage):
+    """
+    Send a message and get a streaming response via Server-Sent Events (SSE).
+
+    Events emitted:
+    - ``{"type": "sources", "sources": [...]}`` — sent before generation starts
+    - ``{"type": "token", "text": "..."}``       — one per streamed token
+    - ``[DONE]``                                  — signals end of stream
+    - ``{"type": "error", "message": "..."}``     — on failure
+    """
+    engine = get_chat_engine()
+
+    async def event_generator():
+        try:
+            async for event_type, data in engine.stream_question(
+                user_message=request.message,
+                history=request.history,
+            ):
+                if event_type == "sources":
+                    payload = json_module.dumps({"type": "sources", "sources": data})
+                    yield f"data: {payload}\n\n"
+                elif event_type == "token":
+                    payload = json_module.dumps({"type": "token", "text": data})
+                    yield f"data: {payload}\n\n"
+                elif event_type == "done":
+                    yield "data: [DONE]\n\n"
+        except Exception as e:
+            payload = json_module.dumps({"type": "error", "message": str(e)})
+            yield f"data: {payload}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/stats", tags=["System"])

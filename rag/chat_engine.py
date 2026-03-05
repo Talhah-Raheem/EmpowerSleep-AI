@@ -23,12 +23,12 @@ import json
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import AsyncGenerator, Optional
 
 import faiss
 import numpy as np
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 
 # Load environment variables
 load_dotenv()
@@ -242,6 +242,7 @@ def _format_sources(chunks: list[dict]) -> list[dict]:
             - snippet: (optional) Text preview
     """
     seen_urls = set()
+    seen_notion_titles = set()
     sources = []
 
     # Group textbook chunks by book to combine page ranges
@@ -250,7 +251,18 @@ def _format_sources(chunks: list[dict]) -> list[dict]:
     for chunk in chunks:
         source_type = chunk.get("source", "blog")
 
-        if source_type == "textbook":
+        if source_type == "notion":
+            title = chunk.get("title", "EmpowerSleep")
+            if title not in seen_notion_titles:
+                seen_notion_titles.add(title)
+                sources.append({
+                    "source_type": "notion",
+                    "title": title,
+                    "url": "https://www.empowersleep.com/",
+                    "snippet": chunk.get("text", "")[:200],
+                })
+
+        elif source_type == "textbook":
             book_title = chunk.get("book_title", "Textbook")
             page_start = chunk.get("page_start", 0)
             page_end = chunk.get("page_end", page_start)
@@ -331,6 +343,7 @@ class ChatEngine:
     def __init__(self):
         """Initialize the chat engine and verify resources are available."""
         self._client = None
+        self._async_client = None
         self._verify_resources()
 
     def _verify_resources(self):
@@ -352,6 +365,16 @@ class ChatEngine:
         if self._client is None:
             self._client = _get_openai_client()
         return self._client
+
+    @property
+    def async_client(self) -> AsyncOpenAI:
+        """Lazy-load AsyncOpenAI client."""
+        if self._async_client is None:
+            api_key = os.environ.get("OPENAI_API_KEY")
+            if not api_key:
+                raise ValueError("OPENAI_API_KEY not set. Add it to your .env file.")
+            self._async_client = AsyncOpenAI(api_key=api_key)
+        return self._async_client
 
     def ask_question(
         self,
@@ -514,15 +537,13 @@ class ChatEngine:
 
         return "\n\n".join(formatted)
 
-    def _generate_answer(
+    def _build_llm_messages(
         self,
         query: str,
         context: str,
         history: list[dict]
-    ) -> str:
-        """Generate an answer using the LLM with retrieved context."""
-
-        # Format conversation history if available
+    ) -> list[dict]:
+        """Build the messages list for the LLM (shared by sync and async paths)."""
         history_section = ""
         if history:
             formatted_history = self._format_conversation_history(history)
@@ -550,17 +571,82 @@ Instructions:
 5. If the user answered a clarifying question, use their answer to ADVANCE into more specific, targeted guidance. Do not restart from a general overview.
 6. Keep it concise and easy to read. Short paragraphs or bullets are preferred."""
 
+        return [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_message},
+        ]
+
+    def _generate_answer(
+        self,
+        query: str,
+        context: str,
+        history: list[dict]
+    ) -> str:
+        """Generate an answer using the LLM with retrieved context."""
+        messages = self._build_llm_messages(query, context, history)
+
         response = self.client.chat.completions.create(
             model=LLM_MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message},
-            ],
+            messages=messages,
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
         )
 
         return response.choices[0].message.content
+
+    async def stream_question(
+        self,
+        user_message: str,
+        history: Optional[list[dict]] = None
+    ) -> AsyncGenerator[tuple[str, object], None]:
+        """
+        Async generator that streams the RAG response as (event_type, data) tuples.
+
+        Yields:
+            ("sources", list[dict]) — retrieved sources (before generation starts)
+            ("token", str)          — text token from the LLM
+            ("done", None)          — signals end of stream
+        """
+        history = history or []
+
+        # Step 1: Build search query + retrieve chunks (sync, fast)
+        search_query = self._build_search_query(user_message, history)
+        chunks = self._retrieve_chunks(search_query)
+
+        if not chunks:
+            yield ("sources", [])
+            yield ("token", (
+                "I don't have specific information on that topic in my knowledge base. "
+                "Could you tell me a bit more about what aspect of sleep you're curious about?"
+            ))
+            yield ("token", DISCLAIMER_SUFFIX)
+            yield ("done", None)
+            return
+
+        # Step 2: Yield sources before generation begins
+        sources = _format_sources(chunks)[:3]
+        yield ("sources", sources)
+
+        # Step 3: Build prompt and stream from OpenAI
+        context = self._format_context(chunks)
+        messages = self._build_llm_messages(user_message, context, history)
+
+        stream = await self.async_client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=messages,
+            temperature=LLM_TEMPERATURE,
+            max_tokens=LLM_MAX_TOKENS,
+            stream=True,
+        )
+
+        async for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield ("token", delta)
+
+        # Step 4: Append disclaimer as final token
+        yield ("token", DISCLAIMER_SUFFIX)
+        yield ("done", None)
 
     def get_index_stats(self) -> dict:
         """

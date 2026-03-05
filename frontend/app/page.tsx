@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, FormEvent } from 'react';
 import { useTheme } from 'next-themes';
-import { Message, sendMessage } from '@/lib/api';
+import { Message, Source, streamMessage } from '@/lib/api';
 import { getRandomQuestions } from '@/lib/sampleQuestions';
 import { ChatMessage } from '@/components/ChatMessage';
 import { SleepLoader } from '@/components/SleepLoader';
@@ -24,6 +24,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sampleQuestions, setSampleQuestions] = useState<string[]>([]);
   const [mounted, setMounted] = useState(false);
@@ -40,10 +41,30 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const pendingSourcesRef = useRef<Source[]>([]);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
 
-  // Auto-scroll to bottom when messages change
+  // Immediately stop auto-scroll when user scrolls up (fires before scroll event)
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.deltaY < 0) userScrolledUpRef.current = true;
+  };
+
+  // Resume auto-scroll when user manually scrolls back to the bottom
+  const handleChatScroll = () => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 30) {
+      userScrolledUpRef.current = false;
+    }
+  };
+
+  // Auto-scroll only when user is near the bottom (instant, no animation to fight)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!userScrolledUpRef.current) {
+      const el = chatContainerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }
   }, [messages, isLoading]);
 
   // Focus input on mount
@@ -56,55 +77,113 @@ export default function ChatPage() {
   };
 
   /**
+   * Core streaming logic shared by handleSubmit and handleRegenerate.
+   * Assumes the user message is already in `messages` state.
+   */
+  const runStream = async (userMessageText: string, historySnapshot: Message[]) => {
+    pendingSourcesRef.current = [];
+    userScrolledUpRef.current = false;
+
+    let firstToken = true;
+
+    try {
+      await streamMessage(
+        userMessageText,
+        historySnapshot,
+        abortControllerRef.current!.signal,
+        {
+          onSources: (sources) => {
+            pendingSourcesRef.current = sources;
+          },
+          onToken: (text) => {
+            if (firstToken) {
+              firstToken = false;
+              setIsLoading(false);
+              setIsStreaming(true);
+              setMessages((prev) => [
+                ...prev,
+                { role: 'assistant', content: text },
+              ]);
+            } else {
+              setMessages((prev) => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                updated[updated.length - 1] = { ...last, content: last.content + text };
+                return updated;
+              });
+            }
+          },
+          onDone: () => {
+            setIsStreaming(false);
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              updated[updated.length - 1] = { ...last, sources: pendingSourcesRef.current };
+              return updated;
+            });
+          },
+          onError: (err) => {
+            setIsStreaming(false);
+            setIsLoading(false);
+            setError(err.message);
+            setMessages((prev) => prev.slice(0, -1));
+          },
+        },
+      );
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      setError(err instanceof Error ? err.message : 'Failed to send message');
+      setMessages((prev) => prev.slice(0, -1));
+    } finally {
+      abortControllerRef.current = null;
+      setIsLoading(false);
+      setIsStreaming(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  /**
    * Handle sending a message
    */
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
     const trimmedInput = input.trim();
-    if (!trimmedInput || isLoading) return;
+    if (!trimmedInput || isLoading || isStreaming) return;
 
-    // Clear input and error, reset textarea height
     setInput('');
     setError(null);
     if (inputRef.current) inputRef.current.style.height = 'auto';
 
-    // Create new AbortController for this request
     abortControllerRef.current = new AbortController();
+    const historySnapshot = messages;
 
-    // Add user message
-    const userMessage: Message = { role: 'user', content: trimmedInput };
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => [...prev, { role: 'user', content: trimmedInput }]);
     setIsLoading(true);
 
-    try {
-      // Send to API with conversation history and abort signal
-      const response = await sendMessage(
-        trimmedInput,
-        messages,
-        abortControllerRef.current.signal
-      );
+    await runStream(trimmedInput, historySnapshot);
+  };
 
-      // Add assistant message
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: response.answer,
-        sources: response.sources,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (err) {
-      // Don't show error if request was aborted (user clicked New Chat)
-      if (err instanceof Error && err.name === 'AbortError') {
-        return;
-      }
-      setError(err instanceof Error ? err.message : 'Failed to send message');
-      // Remove the user message if the request failed
-      setMessages((prev) => prev.slice(0, -1));
-    } finally {
-      abortControllerRef.current = null;
-      setIsLoading(false);
-      inputRef.current?.focus();
-    }
+  /**
+   * Regenerate the assistant response at the given message index.
+   * Removes that response and re-streams it using the same user message.
+   */
+  const handleRegenerate = async (assistantIndex: number) => {
+    if (isLoading || isStreaming) return;
+
+    const userMsg = messages[assistantIndex - 1];
+    if (!userMsg || userMsg.role !== 'user') return;
+
+    const historySnapshot = messages.slice(0, assistantIndex - 1);
+
+    // Drop the old assistant response (and anything after it)
+    setMessages((prev) => prev.slice(0, assistantIndex));
+    setError(null);
+
+    abortControllerRef.current = new AbortController();
+    setIsLoading(true);
+
+    await runStream(userMsg.content, historySnapshot);
   };
 
   /**
@@ -127,6 +206,7 @@ export default function ChatPage() {
     setMessages([]);
     setError(null);
     setIsLoading(false);
+    setIsStreaming(false);
     // Show fresh sample questions
     setSampleQuestions(getRandomQuestions(3));
     inputRef.current?.focus();
@@ -136,13 +216,18 @@ export default function ChatPage() {
     <div className="flex flex-col h-screen bg-empower-50 dark:bg-empower-900">
       {/* Header */}
       <header className="bg-white dark:bg-empower-800 border-b border-empower-100 dark:border-empower-700 px-4 py-3 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-3">
+        <a
+          href="https://www.empowersleep.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+        >
           <EmpowerLogo className="h-10 w-10 text-empower-500 dark:text-empower-300" />
           <div>
             <h1 className="text-lg font-heading font-semibold text-empower-700 dark:text-empower-100">EmpowerSleep</h1>
             <p className="text-xs text-empower-400 dark:text-empower-500">Sleep care, simplified</p>
           </div>
-        </div>
+        </a>
         <div className="flex items-center gap-2">
           {messages.length > 0 && (
             <button
@@ -181,7 +266,7 @@ export default function ChatPage() {
       </header>
 
       {/* Chat area */}
-      <main className="flex-1 overflow-y-auto chat-scrollbar px-4 py-6">
+      <main ref={chatContainerRef} onScroll={handleChatScroll} onWheel={handleWheel} className="flex-1 overflow-y-auto chat-scrollbar px-4 py-6">
         <div className="max-w-3xl mx-auto space-y-4">
           {/* Welcome message when empty */}
           {messages.length === 0 && (
@@ -212,7 +297,12 @@ export default function ChatPage() {
 
           {/* Messages */}
           {messages.map((message, index) => (
-            <ChatMessage key={index} message={message} />
+            <ChatMessage
+              key={index}
+              message={message}
+              streaming={isStreaming && index === messages.length - 1 && message.role === 'assistant'}
+              onRegenerate={message.role === 'assistant' ? () => handleRegenerate(index) : undefined}
+            />
           ))}
 
           {/* Loading indicator - branded sleep-themed loader */}
@@ -249,20 +339,20 @@ export default function ChatPage() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  if (input.trim() && !isLoading) {
+                  if (input.trim() && !isLoading && !isStreaming) {
                     handleSubmit(e as unknown as FormEvent);
                   }
                 }
               }}
               placeholder="Ask me about sleep..."
-              disabled={isLoading}
+              disabled={isLoading || isStreaming}
               rows={1}
               className="flex-1 px-5 py-3 rounded-2xl border border-empower-200 dark:border-empower-600 bg-white dark:bg-empower-700 text-empower-800 dark:text-empower-100 placeholder:text-empower-300 dark:placeholder:text-empower-500 focus:outline-none focus:ring-2 focus:ring-empower-400 dark:focus:ring-empower-500 focus:border-transparent disabled:bg-empower-50 dark:disabled:bg-empower-800 disabled:text-empower-300 dark:disabled:text-empower-600 transition-shadow resize-none overflow-hidden"
               style={{ maxHeight: '96px' }}
             />
             <button
               type="submit"
-              disabled={!input.trim() || isLoading}
+              disabled={!input.trim() || isLoading || isStreaming}
               className="px-6 py-3 bg-empower-500 dark:bg-empower-600 text-white rounded-full font-medium hover:bg-empower-600 dark:hover:bg-empower-500 disabled:bg-empower-200 dark:disabled:bg-empower-700 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
               Send

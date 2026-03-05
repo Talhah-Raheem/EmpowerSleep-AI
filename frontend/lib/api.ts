@@ -12,7 +12,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8
  * Source citation from the RAG system
  */
 export interface Source {
-  source_type: 'textbook' | 'blog' | 'web';
+  source_type: 'textbook' | 'blog' | 'web' | 'notion';
   title: string;
   chapter?: string;
   page_start?: number;
@@ -72,6 +72,91 @@ export async function sendMessage(
   }
 
   return response.json();
+}
+
+/**
+ * Callbacks for the streaming chat API.
+ */
+export interface StreamCallbacks {
+  onToken: (text: string) => void;
+  onSources: (sources: Source[]) => void;
+  onDone: () => void;
+  onError: (err: Error) => void;
+}
+
+/**
+ * Send a chat message to the streaming API endpoint.
+ *
+ * Reads the SSE response body and dispatches events via callbacks.
+ * Sources arrive before the first token; [DONE] signals end of stream.
+ *
+ * @param message   - The user's message
+ * @param history   - Optional conversation history for context
+ * @param signal    - Optional AbortSignal to cancel the stream
+ * @param callbacks - Event handlers for tokens, sources, completion, and errors
+ */
+export async function streamMessage(
+  message: string,
+  history?: Message[],
+  signal?: AbortSignal,
+  callbacks?: StreamCallbacks,
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message,
+      history: history?.map((m) => ({ role: m.role, content: m.content })),
+    }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || `API error: ${response.status}`);
+  }
+
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop() ?? '';
+
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith('data:')) continue;
+
+        const dataStr = line.slice(5).trim();
+        if (dataStr === '[DONE]') {
+          callbacks?.onDone();
+          return;
+        }
+
+        try {
+          const event = JSON.parse(dataStr);
+          if (event.type === 'token') {
+            callbacks?.onToken(event.text);
+          } else if (event.type === 'sources') {
+            callbacks?.onSources(event.sources);
+          } else if (event.type === 'error') {
+            callbacks?.onError(new Error(event.message));
+            return;
+          }
+        } catch {
+          // ignore malformed SSE lines
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 /**

@@ -16,19 +16,20 @@ User Question
 │              frontend (Next.js @ :3000)                 │
 │                                                         │
 │  1. User types question in chat UI                      │
-│  2. POST /chat to backend                               │
-│  3. Display answer + sources                            │
+│  2. POST /chat/stream to backend (SSE streaming)        │
+│  3. Tokens stream in live; sources attach on done       │
 └─────────────────────────────────────────────────────────┘
      │
      ▼
 ┌─────────────────────────────────────────────────────────┐
 │              backend (FastAPI @ :8000)                  │
 │                                                         │
-│  1. ChatEngine.ask_question()                           │
+│  1. ChatEngine.stream_question()                        │
 │  2. embed_query() ──► OpenAI text-embedding-3-small    │
 │  3. retrieve_chunks() ──► FAISS search                 │
-│  4. generate_answer() ──► GPT-4o-mini with context     │
-│  5. Return JSON { answer, sources }                     │
+│  4. yield sources (before generation)                   │
+│  5. AsyncOpenAI stream ──► GPT-4o-mini tokens          │
+│  6. yield DISCLAIMER_SUFFIX as final token              │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -37,14 +38,18 @@ User Question
 ### Backend
 
 **`backend/main.py`** - FastAPI application
-- `POST /chat` - Main chat endpoint
+- `POST /chat` - Original non-streaming endpoint (still works, backward compat)
+- `POST /chat/stream` - SSE streaming endpoint (used by frontend)
 - `GET /health` - Health check
 - `GET /stats` - Index statistics
 - CORS configured for localhost:3000
 
 **`rag/chat_engine.py`** - Core RAG logic
 - `ChatEngine` class - Main interface
-- `ask_question(message, history)` - Returns (answer, sources)
+- `ask_question(message, history)` - Sync, returns (answer, sources) — used by /chat
+- `stream_question(message, history)` - Async generator for /chat/stream
+- `_build_llm_messages(query, context, history)` - Shared by both paths
+- `_async_client` property — lazy AsyncOpenAI instance
 - Configuration constants at top of file
 - System prompt enforces educational, non-diagnostic tone
 
@@ -56,19 +61,26 @@ User Question
 ### Frontend
 
 **`frontend/app/page.tsx`** - Main chat page
-- Chat interface with message bubbles
-- Calls `/chat` endpoint
-- Displays sources (textbook with pages, blog with links)
+- `isStreaming` state — true while tokens are arriving
+- `runStream()` — shared streaming logic called by both handleSubmit and handleRegenerate
+- `handleRegenerate(index)` — drops assistant message at index and re-streams
+- `pendingSourcesRef` — holds sources until streaming completes
+- `chatContainerRef` + `userScrolledUpRef` — free-scroll during generation
+- `onWheel` stops auto-scroll immediately on upward scroll; `onScroll` resumes when back at bottom
+- Logo/title links to https://www.empowersleep.com/
 
 **`frontend/components/`**
-- `ChatMessage.tsx` - Message bubble component
-- `SourceCard.tsx` - Source citation display
-- `SleepLoader.tsx` - Branded loading animation with sleep thoughts
+- `ChatMessage.tsx` - Message bubble; `streaming` prop shows blinking cursor; `onRegenerate` prop shows ↺ button
+- `SourceCard.tsx` - Source citation display; blog/notion sources show EmpowerLogo + link; textbook shows static card
+- `SleepLoader.tsx` - Branded loading animation (shows until first streaming token)
 
 **`frontend/lib/`**
-- `api.ts` - API client for backend (supports request cancellation)
+- `api.ts` - `sendMessage()` (non-streaming) + `streamMessage()` (SSE callbacks: onToken, onSources, onDone, onError)
 - `sleepThoughts.ts` - Calm messages shown during loading
 - `sampleQuestions.ts` - Rotating sample questions for welcome screen
+
+**`frontend/app/globals.css`**
+- `animate-blink` keyframe — used by streaming cursor in ChatMessage
 
 ### Scripts
 
@@ -87,6 +99,13 @@ User Question
 - Merges with existing index
 - Tracks via manifest for idempotency
 
+**`scripts/ingest_notion_export.py`** ← NEW
+- Ingests Notion markdown export from `data/raw/empower_sleep_notion/`
+- Cleans Notion-exported markdown (strips image refs, flattens internal links)
+- Chunks at ~400 words (smaller than blog — Notion pages are shorter)
+- Source type: `"notion"` — displays with EmpowerLogo linking to empowersleep.com
+- Run with `--rebuild` to replace previously ingested Notion content
+
 ## Configuration
 
 All config is in `rag/chat_engine.py`:
@@ -95,17 +114,18 @@ All config is in `rag/chat_engine.py`:
 |---------|-------|
 | Embedding Model | `text-embedding-3-small` |
 | Embedding Dim | 1536 |
-| Top-K Results | 4 |
+| Top-K Results | 6 |
 | LLM Model | `gpt-4o-mini` |
 | LLM Temperature | 0.3 |
-| Max Tokens | 600 |
+| Max Tokens | 750 |
 
 ## Data Flow
 
 1. **Scraping**: `scrape_empowersleep_blog.py` → `data/blog_docs.jsonl`
 2. **Indexing**: `build_blog_index.py` → `rag_artifacts/`
 3. **Textbooks**: `ingest_textbook.py` → merges into `rag_artifacts/`
-4. **Serving**: Backend loads index, handles queries via `/chat`
+4. **Notion**: `ingest_notion_export.py` → merges into `rag_artifacts/`
+5. **Serving**: Backend loads index, streams responses via `/chat/stream`
 
 ## Important Behaviors
 
@@ -116,14 +136,24 @@ All config is in `rag/chat_engine.py`:
 - Maintains conversation continuity
 
 ### Source Types
-- **Blog**: `{source_type: "blog", title, url}`
-- **Textbook**: `{source_type: "textbook", title, chapter, page_start, page_end}`
+- **Blog**: `{source_type: "blog", title, url}` — EmpowerLogo + link
+- **Textbook**: `{source_type: "textbook", title, chapter, page_start, page_end}` — static card
+- **Notion**: `{source_type: "notion", title, url: "https://www.empowersleep.com/"}` — EmpowerLogo + link to site
+
+### Streaming SSE Format (backend → frontend)
+```
+data: {"type": "sources", "sources": [...]}
+data: {"type": "token", "text": "Sleep "}
+data: {"type": "token", "text": "hygiene "}
+data: [DONE]
+```
+Sources are sent before the first token. Disclaimer is yielded as the final token.
 
 ## Dependencies
 
 ### Python (requirements.txt)
 - `faiss-cpu` - Vector similarity search
-- `openai` - Embeddings + LLM
+- `openai` - Embeddings + LLM (sync + async)
 - `fastapi` + `uvicorn` - Backend API
 - `PyMuPDF` - PDF extraction
 - `python-dotenv` - Environment variables
@@ -162,7 +192,7 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 
 ## Common Tasks
 
-### Rebuild index after content changes
+### Rebuild index after blog content changes
 ```bash
 python scripts/scrape_empowersleep_blog.py
 python scripts/build_blog_index.py
@@ -172,6 +202,16 @@ python scripts/build_blog_index.py
 ```bash
 python scripts/ingest_textbook.py --pdf data/raw/Book.pdf --book-title "Book Name"
 ```
+
+### Add / update Notion content
+```bash
+# First time
+python scripts/ingest_notion_export.py
+
+# After re-exporting from Notion
+python scripts/ingest_notion_export.py --rebuild
+```
+Notion export lives at: `data/raw/empower_sleep_notion/`
 
 ### Modify retrieval behavior
 Edit `TOP_K_RESULTS` in `rag/chat_engine.py`
