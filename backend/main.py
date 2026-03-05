@@ -288,6 +288,7 @@ async def submit_feedback(request: FeedbackRequest):
             "user_question": request.user_question,
             "ai_response": request.ai_response,
             "rating": request.rating,
+            "environment": os.environ.get("APP_ENV", "production"),
         }).execute()
         return {"status": "ok"}
     except ValueError as e:
