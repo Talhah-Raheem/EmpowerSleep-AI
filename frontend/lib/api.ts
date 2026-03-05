@@ -160,6 +160,32 @@ export async function streamMessage(
 }
 
 /**
+ * Submit thumbs up/down feedback for an AI response.
+ *
+ * @param sessionId    - Anonymous session identifier
+ * @param userQuestion - The user's question
+ * @param aiResponse   - The AI's response
+ * @param rating       - 1 for thumbs up, -1 for thumbs down
+ */
+export async function submitFeedback(
+  sessionId: string,
+  userQuestion: string,
+  aiResponse: string,
+  rating: 1 | -1,
+): Promise<void> {
+  await fetch(`${API_BASE_URL}/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      session_id: sessionId,
+      user_question: userQuestion,
+      ai_response: aiResponse,
+      rating,
+    }),
+  });
+}
+
+/**
  * Format a source for display.
  *
  * Textbook: 📖 **Title** – Chapter X (pp. Y–Z)

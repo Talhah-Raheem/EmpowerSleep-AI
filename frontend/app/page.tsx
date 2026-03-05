@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, FormEvent } from 'react';
 import { useTheme } from 'next-themes';
-import { Message, Source, streamMessage } from '@/lib/api';
+import { Message, Source, streamMessage, submitFeedback } from '@/lib/api';
 import { getRandomQuestions } from '@/lib/sampleQuestions';
 import { ChatMessage } from '@/components/ChatMessage';
 import { SleepLoader } from '@/components/SleepLoader';
@@ -44,6 +44,7 @@ export default function ChatPage() {
   const pendingSourcesRef = useRef<Source[]>([]);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
+  const sessionIdRef = useRef<string>(crypto.randomUUID());
 
   // Immediately stop auto-scroll when user scrolls up (fires before scroll event)
   const handleWheel = (e: React.WheelEvent) => {
@@ -187,6 +188,21 @@ export default function ChatPage() {
   };
 
   /**
+   * Submit thumbs up/down feedback for an assistant message.
+   */
+  const handleFeedback = async (messageIndex: number, rating: 1 | -1) => {
+    const aiMessage = messages[messageIndex];
+    const userMessage = messages[messageIndex - 1];
+    if (!aiMessage || !userMessage) return;
+    await submitFeedback(
+      sessionIdRef.current,
+      userMessage.content,
+      aiMessage.content,
+      rating,
+    );
+  };
+
+  /**
    * Handle clicking a demo question
    */
   const handleDemoClick = (question: string) => {
@@ -302,6 +318,7 @@ export default function ChatPage() {
               message={message}
               streaming={isStreaming && index === messages.length - 1 && message.role === 'assistant'}
               onRegenerate={message.role === 'assistant' ? () => handleRegenerate(index) : undefined}
+              onFeedback={message.role === 'assistant' ? (rating) => handleFeedback(index, rating) : undefined}
             />
           ))}
 

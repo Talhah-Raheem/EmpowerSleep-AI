@@ -9,6 +9,7 @@ interface ChatMessageProps {
   message: Message;
   streaming?: boolean;
   onRegenerate?: () => void;
+  onFeedback?: (rating: 1 | -1) => void;
 }
 
 /**
@@ -17,9 +18,10 @@ interface ChatMessageProps {
  * - User messages: right-aligned, blue bubble
  * - Assistant messages: left-aligned, gray bubble with sources
  */
-export function ChatMessage({ message, streaming, onRegenerate }: ChatMessageProps) {
+export function ChatMessage({ message, streaming, onRegenerate, onFeedback }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
+  const [feedback, setFeedback] = useState<1 | -1 | null>(null);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(message.content);
@@ -101,20 +103,66 @@ export function ChatMessage({ message, streaming, onRegenerate }: ChatMessagePro
           <SourceList sources={message.sources} />
         )}
 
-        {/* Regenerate button */}
-        {!isUser && onRegenerate && !streaming && (
-          <div className="mt-2 flex justify-end">
-            <button
-              onClick={onRegenerate}
-              title="Regenerate response"
-              className="flex items-center gap-1 text-xs text-empower-400 dark:text-empower-500 hover:text-empower-600 dark:hover:text-empower-300 transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-              </svg>
-              Regenerate
-            </button>
+        {/* Action buttons (regenerate + feedback) */}
+        {!isUser && !streaming && (onRegenerate || onFeedback) && (
+          <div className="mt-2 flex items-center justify-between gap-2">
+            {/* Feedback buttons */}
+            {onFeedback && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    if (feedback !== null) return;
+                    setFeedback(1);
+                    onFeedback(1);
+                  }}
+                  disabled={feedback !== null}
+                  title="Helpful"
+                  className={`p-1 rounded-md transition-colors ${
+                    feedback === 1
+                      ? 'text-empower-600 dark:text-empower-300'
+                      : 'text-empower-300 dark:text-empower-600 hover:text-empower-600 dark:hover:text-empower-300 hover:bg-empower-50 dark:hover:bg-empower-700'
+                  } disabled:cursor-default`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={feedback === 1 ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z" />
+                    <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => {
+                    if (feedback !== null) return;
+                    setFeedback(-1);
+                    onFeedback(-1);
+                  }}
+                  disabled={feedback !== null}
+                  title="Not helpful"
+                  className={`p-1 rounded-md transition-colors ${
+                    feedback === -1
+                      ? 'text-empower-600 dark:text-empower-300'
+                      : 'text-empower-300 dark:text-empower-600 hover:text-empower-600 dark:hover:text-empower-300 hover:bg-empower-50 dark:hover:bg-empower-700'
+                  } disabled:cursor-default`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={feedback === -1 ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z" />
+                    <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            {/* Regenerate button */}
+            {onRegenerate && (
+              <button
+                onClick={onRegenerate}
+                title="Regenerate response"
+                className="flex items-center gap-1 text-xs text-empower-400 dark:text-empower-500 hover:text-empower-600 dark:hover:text-empower-300 transition-colors ml-auto"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                </svg>
+                Regenerate
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -25,6 +25,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from supabase import create_client, Client
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -76,6 +77,14 @@ class HealthResponse(BaseModel):
     total_vectors: Optional[int] = None
 
 
+class FeedbackRequest(BaseModel):
+    """Request model for feedback endpoint."""
+    session_id: str
+    user_question: str
+    ai_response: str
+    rating: int  # 1 = thumbs up, -1 = thumbs down
+
+
 # =============================================================================
 # FASTAPI APP
 # =============================================================================
@@ -112,6 +121,21 @@ app.add_middleware(
 
 # Global chat engine instance (initialized on first request)
 _chat_engine: Optional[ChatEngine] = None
+
+# Global Supabase client (lazy, initialized on first use)
+_supabase: Optional[Client] = None
+
+
+def get_supabase() -> Client:
+    """Get or create the Supabase client instance."""
+    global _supabase
+    if _supabase is None:
+        url = os.environ.get("SUPABASE_URL")
+        key = os.environ.get("SUPABASE_SECRET_KEY")
+        if not url or not key:
+            raise ValueError("SUPABASE_URL and SUPABASE_SECRET_KEY must be set")
+        _supabase = create_client(url, key)
+    return _supabase
 
 
 def get_chat_engine() -> ChatEngine:
@@ -247,6 +271,29 @@ async def chat_stream(request: ChatMessage):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.post("/feedback", tags=["Feedback"])
+async def submit_feedback(request: FeedbackRequest):
+    """
+    Submit feedback (thumbs up/down) for an AI response.
+
+    Stores the session ID, user question, AI response, and rating in Supabase.
+    Rating: 1 = thumbs up, -1 = thumbs down.
+    """
+    try:
+        db = get_supabase()
+        db.table("feedback").insert({
+            "session_id": request.session_id,
+            "user_question": request.user_question,
+            "ai_response": request.ai_response,
+            "rating": request.rating,
+        }).execute()
+        return {"status": "ok"}
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save feedback: {str(e)}")
 
 
 @app.get("/stats", tags=["System"])
