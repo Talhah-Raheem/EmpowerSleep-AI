@@ -1,193 +1,134 @@
 # EmpowerSleep
 
-A sleep education chatbot powered by RAG (Retrieval-Augmented Generation) using content from the EmpowerSleep blog and textbooks.
+AI-powered sleep education chatbot for [empowersleep.com](https://www.empowersleep.com). Answers sleep questions grounded in expert content from the EmpowerSleep blog, textbooks, and program materials.
+
+**Live at**: https://www.empowersleep.com
+
+---
 
 ## Architecture
 
-The application uses a modern split architecture:
-- **Backend**: FastAPI serving the RAG pipeline
-- **Frontend**: Next.js (App Router) with a modern chat UI
+- **Backend**: FastAPI + RAG pipeline (Python) — deployed on Railway
+- **Frontend**: Next.js App Router — deployed on Railway
+- **Vector store**: FAISS (cosine similarity, `text-embedding-3-small`)
+- **LLM**: GPT-4o-mini via OpenAI
+- **Database**: Supabase (feedback storage)
 
-## Quick Start
-
-### 1. Setup Python Environment
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
 ```
-
-### 2. Configure Environment
-
-```bash
-# Add your OpenAI API key
-echo "OPENAI_API_KEY=sk-..." > .env
+User → Next.js frontend → FastAPI backend → FAISS retrieval → GPT-4o-mini → SSE stream → User
 ```
-
-### 3. Build the Index
-
-```bash
-# Scrape blog content and build index
-python scripts/scrape_empowersleep_blog.py
-python scripts/build_blog_index.py
-
-# (Optional) Add a textbook
-python scripts/ingest_textbook.py \
-    --pdf data/raw/Sleep_And_Health.pdf \
-    --book-title "Sleep and Health"
-```
-
-### 4. Run the Application
-
-```bash
-# Terminal 1: Start the backend
-python -m uvicorn backend.main:app --reload --port 8000
-
-# Terminal 2: Start the frontend
-cd frontend
-npm install
-npm run dev
-```
-
-Then open http://localhost:3000
 
 ## Project Structure
 
 ```
 EMPOWERSLEEP/
 ├── backend/
-│   └── main.py                 # FastAPI backend
+│   └── main.py                    # FastAPI app (chat, feedback, health, stats endpoints)
 ├── frontend/
 │   ├── app/
-│   │   ├── layout.tsx          # Root layout
-│   │   ├── page.tsx            # Chat page
-│   │   └── globals.css         # Styles
+│   │   ├── layout.tsx
+│   │   ├── page.tsx               # Main chat UI
+│   │   └── globals.css
 │   ├── components/
-│   │   ├── ChatMessage.tsx     # Message bubbles
-│   │   ├── SourceCard.tsx      # Source citations
-│   │   └── SleepLoader.tsx     # Branded loading animation
-│   ├── lib/
-│   │   ├── api.ts              # API client
-│   │   ├── sleepThoughts.ts    # Loading screen messages
-│   │   └── sampleQuestions.ts  # Rotating welcome questions
-│   └── package.json
+│   │   ├── ChatMessage.tsx        # Message bubbles with feedback buttons
+│   │   ├── SourceCard.tsx         # Source citations
+│   │   ├── SleepLoader.tsx        # Branded loading animation
+│   │   └── EmpowerLogo.tsx        # SVG logo
+│   └── lib/
+│       ├── api.ts                 # API client (streaming + feedback)
+│       ├── sleepThoughts.ts       # Loading screen messages
+│       └── sampleQuestions.ts     # Welcome screen questions
 ├── rag/
-│   ├── chat_engine.py          # Core RAG logic (used by backend)
+│   ├── chat_engine.py             # Core RAG logic
 │   └── ingestion/
 │       └── textbook_ingestor.py
 ├── scripts/
 │   ├── scrape_empowersleep_blog.py
 │   ├── build_blog_index.py
-│   └── ingest_textbook.py
+│   ├── ingest_textbook.py
+│   └── ingest_notion_export.py
 ├── data/
 │   ├── blog_docs.jsonl
-│   └── raw/                    # PDF textbooks
-├── rag_artifacts/              # FAISS index + chunks
+│   └── raw/                       # PDFs + Notion export
+├── rag_artifacts/                 # FAISS index (committed)
 └── requirements.txt
 ```
 
+## Local Development
+
+```bash
+# Terminal 1 — backend
+source venv/bin/activate
+python -m uvicorn backend.main:app --reload --port 8000
+
+# Terminal 2 — frontend
+cd frontend && npm run dev
+```
+
+Make sure `frontend/.env.local` has `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000` and `.env` has `APP_ENV=development`.
+
 ## API Endpoints
 
-### POST /chat
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/chat` | Non-streaming chat (returns full response) |
+| `POST` | `/chat/stream` | SSE streaming chat (used by frontend) |
+| `POST` | `/feedback` | Submit thumbs up/down feedback |
+| `GET` | `/health` | Health check |
+| `GET` | `/stats` | Knowledge base statistics |
 
-Send a message and get a response with sources.
+### SSE streaming format
 
-**Request:**
-```json
-{
-  "message": "What is sleep hygiene?",
-  "history": [
-    {"role": "user", "content": "..."},
-    {"role": "assistant", "content": "..."}
-  ]
-}
+```
+data: {"type": "sources", "sources": [...]}
+data: {"type": "token", "text": "Sleep "}
+data: {"type": "token", "text": "hygiene "}
+data: [DONE]
 ```
 
-**Response:**
-```json
-{
-  "answer": "Sleep hygiene refers to...",
-  "sources": [
-    {
-      "source_type": "textbook",
-      "title": "Sleep and Health",
-      "chapter": "Chapter 3: Sleep Hygiene",
-      "page_start": 45,
-      "page_end": 48
-    },
-    {
-      "source_type": "blog",
-      "title": "5 Tips for Better Sleep",
-      "url": "https://empowersleep.com/..."
-    }
-  ]
-}
-```
+## Knowledge Base
 
-### GET /health
+The RAG index combines three content sources:
 
-Health check endpoint.
+| Source | Script | Output |
+|--------|--------|--------|
+| EmpowerSleep blog | `scrape_empowersleep_blog.py` + `build_blog_index.py` | `data/blog_docs.jsonl` |
+| PDF textbooks | `ingest_textbook.py` | merged into `rag_artifacts/` |
+| Notion export | `ingest_notion_export.py` | merged into `rag_artifacts/` |
 
-### GET /stats
-
-Get knowledge base statistics.
-
-## Textbook Ingestion
-
-Add PDF textbooks to enhance the knowledge base:
+### Rebuild index after content changes
 
 ```bash
-python scripts/ingest_textbook.py \
-    --pdf data/raw/YourTextbook.pdf \
-    --book-title "Your Book Title" \
-    --version v1
+# Blog
+python scripts/scrape_empowersleep_blog.py
+python scripts/build_blog_index.py
+
+# Add a textbook
+python scripts/ingest_textbook.py --pdf data/raw/Book.pdf --book-title "Book Title"
+
+# Notion (re-export from Notion first, place in data/raw/empower_sleep_notion/)
+python scripts/ingest_notion_export.py --rebuild
 ```
 
-**Options:**
-- `--pdf`: Path to PDF file
-- `--book-title`: Display title
-- `--version`: Version string (change to force re-index)
-- `--rebuild`: Force re-processing
+## Deployment (Railway)
 
-**Smoke Test:**
-```bash
-python scripts/ingest_textbook.py --smoke-test "What is REM sleep?"
-```
+Both services are deployed on Railway from this repository. See `CLAUDE.md` for full deployment steps.
 
-## Source Citations
+**Backend env vars on Railway:**
+| Variable | Value |
+|----------|-------|
+| `OPENAI_API_KEY` | sk-... |
+| `SUPABASE_URL` | https://xxxx.supabase.co |
+| `SUPABASE_SECRET_KEY` | service role key |
+| `CORS_ORIGINS` | https://frontend-url.up.railway.app |
 
-The chat displays sources differently based on type:
+**Frontend env vars on Railway:**
+| Variable | Value |
+|----------|-------|
+| `NEXT_PUBLIC_API_BASE_URL` | https://backend-url.up.railway.app |
 
-- **Textbook**: 📖 **Sleep and Health** – Chapter 3 (pp. 45–48)
-- **Blog**: [Article Title](https://empowersleep.com/...)
-
-## How It Works
-
-1. User asks a sleep-related question
-2. Question is embedded using OpenAI text-embedding-3-small
-3. FAISS retrieves the most relevant chunks (blog + textbook)
-4. GPT-4o-mini generates a grounded, educational answer
-5. Sources are cited with page numbers (textbooks) or links (blog)
-
-## Requirements
-
-- Python 3.9+
-- Node.js 18+ (for frontend)
-- OpenAI API key
-
-## Environment Variables
-
-**Backend (.env):**
-```
-OPENAI_API_KEY=sk-...
-```
-
-**Frontend (.env.local):**
-```
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
-```
+> `APP_ENV` is intentionally not set on Railway — the backend defaults to `"production"`.
 
 ---
 
-*Built with FastAPI + Next.js + FAISS + OpenAI*
+*Built with FastAPI · Next.js · FAISS · OpenAI · Supabase*
