@@ -7,6 +7,7 @@ import { getRandomQuestions } from '@/lib/sampleQuestions';
 import { ChatMessage } from '@/components/ChatMessage';
 import { SleepLoader } from '@/components/SleepLoader';
 import { EmpowerLogo } from '@/components/EmpowerLogo';
+import { StarField } from '@/components/StarField';
 
 /**
  * Main chat page component.
@@ -228,89 +229,171 @@ export default function ChatPage() {
     inputRef.current?.focus();
   };
 
+  const themeToggleButton = mounted && (
+    <button
+      onClick={toggleTheme}
+      className="p-2 rounded-lg text-empower-500 hover:text-empower-700 hover:bg-empower-50 dark:text-empower-400 dark:hover:text-empower-200 dark:hover:bg-empower-700 transition-colors"
+      title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+    >
+      {theme === 'dark' ? (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="5" />
+          <line x1="12" y1="1" x2="12" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="23" />
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+          <line x1="1" y1="12" x2="3" y2="12" />
+          <line x1="21" y1="12" x2="23" y2="12" />
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+        </svg>
+      ) : (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      )}
+    </button>
+  );
+
+  const inputForm = (
+    <form onSubmit={handleSubmit}>
+      <div className="flex gap-3 items-end">
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={(e) => {
+            setInput(e.target.value);
+            e.target.style.height = 'auto';
+            const newHeight = Math.min(e.target.scrollHeight, 96);
+            e.target.style.height = newHeight + 'px';
+            e.target.style.overflowY = e.target.scrollHeight > 96 ? 'auto' : 'hidden';
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              if (input.trim() && !isLoading && !isStreaming) {
+                handleSubmit(e as unknown as FormEvent);
+              }
+            }
+          }}
+          placeholder="Ask me about sleep..."
+          disabled={isLoading || isStreaming}
+          rows={1}
+          className="flex-1 px-5 py-3 rounded-2xl border border-empower-200 dark:border-empower-600 bg-white dark:bg-empower-700 text-empower-800 dark:text-empower-100 placeholder:text-empower-300 dark:placeholder:text-empower-500 focus:outline-none focus:ring-2 focus:ring-empower-400 dark:focus:ring-empower-500 focus:border-transparent disabled:bg-empower-50 dark:disabled:bg-empower-800 disabled:text-empower-300 dark:disabled:text-empower-600 transition-shadow resize-none overflow-hidden"
+          style={{ maxHeight: '96px' }}
+        />
+        <button
+          type="submit"
+          disabled={!input.trim() || isLoading || isStreaming}
+          className="px-6 py-3 bg-empower-500 dark:bg-empower-600 text-white rounded-full font-medium hover:bg-empower-600 dark:hover:bg-empower-500 disabled:bg-empower-200 dark:disabled:bg-empower-700 disabled:cursor-not-allowed transition-colors shadow-sm"
+        >
+          Send
+        </button>
+      </div>
+      <p className="text-xs text-empower-400 dark:text-empower-500 text-center mt-2">
+        Educational information only. Not medical advice.
+      </p>
+    </form>
+  );
+
+  /* ── HERO (no messages yet) ── */
+  if (messages.length === 0) {
+    return (
+      <div className="relative flex flex-col h-screen overflow-hidden
+        bg-[radial-gradient(ellipse_at_bottom,_#1a2f3f_0%,_#0d1a24_60%,_#060e14_100%)]
+        dark:bg-[radial-gradient(ellipse_at_bottom,_#1a2f3f_0%,_#0d1a24_60%,_#060e14_100%)]
+        [.light_&]:bg-none">
+
+        {/* Light mode sunrise gradient */}
+        <div className="absolute inset-0 dark:hidden
+          bg-[radial-gradient(ellipse_at_bottom,_#fde68a_0%,_#fca5a5_30%,_#c4b5d4_60%,_#bfdbf7_100%)]" />
+
+        {/* Stars (dark mode only) */}
+        <div className="hidden dark:block">
+          <StarField />
+        </div>
+
+        {/* Minimal top bar */}
+        <div className="relative flex justify-end px-4 py-3 z-10">
+          {themeToggleButton}
+        </div>
+
+        {/* Hero */}
+        <main className="relative flex-1 flex flex-col items-center justify-center px-4 animate-fade-in z-10">
+          <a
+            href="https://www.empowersleep.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:opacity-80 transition-opacity mb-6"
+          >
+            <EmpowerLogo className="h-20 w-20 text-white dark:text-empower-200 drop-shadow-lg" />
+          </a>
+          <h1 className="text-4xl font-heading font-semibold text-white mb-3 text-center drop-shadow">
+            EmpowerSleep
+          </h1>
+          <p className="text-white/70 text-center max-w-md mb-10">
+            Ask me anything about sleep. I&apos;ll provide educational information grounded in expert content.
+          </p>
+
+          {/* Input — centered in hero */}
+          <div className="w-full max-w-2xl mb-8">
+            {inputForm}
+          </div>
+
+          {/* Sample question cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-2xl">
+            {sampleQuestions.map((question) => (
+              <button
+                key={question}
+                onClick={() => handleDemoClick(question)}
+                className="text-left px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-sm text-white/80 hover:bg-white/20 hover:text-white transition-colors"
+              >
+                {question}
+              </button>
+            ))}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  /* ── CHAT (messages exist) ── */
   return (
-    <div className="flex flex-col h-screen bg-empower-50 dark:bg-empower-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-empower-800 border-b border-empower-100 dark:border-empower-700 px-4 py-3 flex items-center justify-between shadow-sm">
+    <div className="relative flex flex-col h-screen overflow-hidden">
+      {/* Same background as hero */}
+      <div className="absolute inset-0 dark:hidden
+        bg-[radial-gradient(ellipse_at_bottom,_#fde68a_0%,_#fca5a5_30%,_#c4b5d4_60%,_#bfdbf7_100%)]" />
+      <div className="absolute inset-0 hidden dark:block
+        bg-[radial-gradient(ellipse_at_bottom,_#1a2f3f_0%,_#0d1a24_60%,_#060e14_100%)]" />
+      <div className="hidden dark:block">
+        <StarField />
+      </div>
+
+      {/* Minimal header — frosted glass */}
+      <header className="relative z-10 bg-white/20 dark:bg-black/30 backdrop-blur-md border-b border-white/20 dark:border-white/10 px-4 py-3 flex items-center justify-between">
         <a
           href="https://www.empowersleep.com/"
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-3 hover:opacity-80 transition-opacity"
         >
-          <EmpowerLogo className="h-10 w-10 text-empower-500 dark:text-empower-300" />
-          <div>
-            <h1 className="text-lg font-heading font-semibold text-empower-700 dark:text-empower-100">EmpowerSleep</h1>
-            <p className="text-xs text-empower-400 dark:text-empower-500">Sleep care, simplified</p>
-          </div>
+          <EmpowerLogo className="h-8 w-8 text-white" />
+          <span className="font-heading font-semibold text-white">EmpowerSleep</span>
         </a>
         <div className="flex items-center gap-2">
-          {messages.length > 0 && (
-            <button
-              onClick={handleNewConversation}
-              className="text-sm text-empower-500 hover:text-empower-700 dark:text-empower-400 dark:hover:text-empower-200 font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-empower-50 dark:hover:bg-empower-700 transition-colors"
-            >
-              <span>New Chat</span>
-            </button>
-          )}
-          {mounted && (
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-lg text-empower-500 hover:text-empower-700 hover:bg-empower-50 dark:text-empower-400 dark:hover:text-empower-200 dark:hover:bg-empower-700 transition-colors"
-              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {theme === 'dark' ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="5" />
-                  <line x1="12" y1="1" x2="12" y2="3" />
-                  <line x1="12" y1="21" x2="12" y2="23" />
-                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                  <line x1="1" y1="12" x2="3" y2="12" />
-                  <line x1="21" y1="12" x2="23" y2="12" />
-                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                </svg>
-              )}
-            </button>
-          )}
+          <button
+            onClick={handleNewConversation}
+            className="text-sm text-white/70 hover:text-white font-medium px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors"
+          >
+            New Chat
+          </button>
+          {themeToggleButton}
         </div>
       </header>
 
       {/* Chat area */}
-      <main ref={chatContainerRef} onScroll={handleChatScroll} onWheel={handleWheel} className="flex-1 overflow-y-auto chat-scrollbar px-4 py-6">
-        <div className="max-w-3xl mx-auto space-y-4">
-          {/* Welcome message when empty */}
-          {messages.length === 0 && (
-            <div className="text-center py-12 animate-fade-in">
-              <EmpowerLogo className="h-20 w-20 mx-auto mb-4 text-empower-500 dark:text-empower-300" />
-              <h2 className="text-2xl font-heading font-semibold text-empower-700 dark:text-empower-100 mb-2">
-                Welcome to EmpowerSleep
-              </h2>
-              <p className="text-empower-500 dark:text-empower-400 mb-8 max-w-md mx-auto">
-                Ask me anything about sleep. I&apos;ll provide educational information
-                grounded in expert content.
-              </p>
-
-              {/* Sample questions - randomly selected */}
-              <div className="flex flex-wrap justify-center gap-2">
-                {sampleQuestions.map((question) => (
-                  <button
-                    key={question}
-                    onClick={() => handleDemoClick(question)}
-                    className="px-4 py-2 bg-white dark:bg-empower-800 border border-empower-200 dark:border-empower-700 rounded-full text-sm text-empower-600 dark:text-empower-300 hover:bg-empower-50 dark:hover:bg-empower-700 hover:border-empower-300 dark:hover:border-empower-600 hover:text-empower-700 dark:hover:text-empower-200 transition-colors shadow-sm"
-                  >
-                    {question}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
+      <main ref={chatContainerRef} onScroll={handleChatScroll} onWheel={handleWheel} className="relative z-10 flex-1 overflow-y-auto chat-scrollbar px-4 py-6">
+        <div className="max-w-4xl mx-auto space-y-6">
           {/* Messages */}
           {messages.map((message, index) => (
             <ChatMessage
@@ -322,7 +405,7 @@ export default function ChatPage() {
             />
           ))}
 
-          {/* Loading indicator - branded sleep-themed loader */}
+          {/* Loading indicator */}
           {isLoading && <SleepLoader />}
 
           {/* Error message */}
@@ -334,51 +417,15 @@ export default function ChatPage() {
             </div>
           )}
 
-          {/* Scroll anchor */}
           <div ref={messagesEndRef} />
         </div>
       </main>
 
       {/* Input area */}
-      <footer className="bg-white dark:bg-empower-800 border-t border-empower-100 dark:border-empower-700 px-4 py-4 shadow-[0_-2px_10px_rgba(0,0,0,0.03)] dark:shadow-[0_-2px_10px_rgba(0,0,0,0.3)]">
-        <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
-          <div className="flex gap-3 items-end">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                e.target.style.height = 'auto';
-                const newHeight = Math.min(e.target.scrollHeight, 96);
-                e.target.style.height = newHeight + 'px';
-                e.target.style.overflowY = e.target.scrollHeight > 96 ? 'auto' : 'hidden';
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  if (input.trim() && !isLoading && !isStreaming) {
-                    handleSubmit(e as unknown as FormEvent);
-                  }
-                }
-              }}
-              placeholder="Ask me about sleep..."
-              disabled={isLoading || isStreaming}
-              rows={1}
-              className="flex-1 px-5 py-3 rounded-2xl border border-empower-200 dark:border-empower-600 bg-white dark:bg-empower-700 text-empower-800 dark:text-empower-100 placeholder:text-empower-300 dark:placeholder:text-empower-500 focus:outline-none focus:ring-2 focus:ring-empower-400 dark:focus:ring-empower-500 focus:border-transparent disabled:bg-empower-50 dark:disabled:bg-empower-800 disabled:text-empower-300 dark:disabled:text-empower-600 transition-shadow resize-none overflow-hidden"
-              style={{ maxHeight: '96px' }}
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading || isStreaming}
-              className="px-6 py-3 bg-empower-500 dark:bg-empower-600 text-white rounded-full font-medium hover:bg-empower-600 dark:hover:bg-empower-500 disabled:bg-empower-200 dark:disabled:bg-empower-700 disabled:cursor-not-allowed transition-colors shadow-sm"
-            >
-              Send
-            </button>
-          </div>
-          <p className="text-xs text-empower-400 dark:text-empower-500 text-center mt-2">
-            Educational information only. Not medical advice.
-          </p>
-        </form>
+      <footer className="relative z-10 bg-white/20 dark:bg-black/30 backdrop-blur-md border-t border-white/20 dark:border-white/10 px-4 py-4">
+        <div className="max-w-4xl mx-auto">
+          {inputForm}
+        </div>
       </footer>
     </div>
   );

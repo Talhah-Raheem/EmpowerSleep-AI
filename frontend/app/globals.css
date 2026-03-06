@@ -141,6 +141,20 @@
   animation-delay: 0.6s;
 }
 
+/* Star twinkle animation */
+@keyframes twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.5); }
+  50%       { opacity: 1; transform: scale(1); }
+}
+
+.star {
+  position: absolute;
+  border-radius: 50%;
+  background: white;
+  animation: twinkle var(--duration) ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+
 /* Streaming cursor blink */
 @keyframes blink {
   0%, 100% { opacity: 1; }
