@@ -155,6 +155,35 @@
   animation-delay: var(--delay);
 }
 
+/* Shooting star */
+@keyframes shoot {
+  0%   { transform: rotate(-35deg) translateX(0);    opacity: 0; width: 0; }
+  5%   { opacity: 1; }
+  30%  { width: 160px; }
+  100% { transform: rotate(-35deg) translateX(700px); opacity: 0; width: 160px; }
+}
+
+.shooting-star {
+  position: absolute;
+  height: 1.5px;
+  background: linear-gradient(90deg, white, transparent);
+  border-radius: 9999px;
+  animation: shoot 0.9s ease-out forwards;
+}
+
+/* Input glow */
+.input-sky:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.5), 0 0 24px rgba(147, 197, 253, 0.2);
+  border-color: transparent;
+}
+
+.light .input-sky:focus,
+html:not(.dark) .input-sky:focus {
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.5), 0 0 24px rgba(251, 191, 36, 0.2);
+  border-color: transparent;
+}
+
 /* Streaming cursor blink */
 @keyframes blink {
   0%, 100% { opacity: 1; }
