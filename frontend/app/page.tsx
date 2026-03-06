@@ -29,6 +29,7 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [sampleQuestions, setSampleQuestions] = useState<string[]>([]);
   const [mounted, setMounted] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const { theme, setTheme } = useTheme();
 
@@ -279,7 +280,7 @@ export default function ChatPage() {
           placeholder="Ask me about sleep..."
           disabled={isLoading || isStreaming}
           rows={1}
-          className="flex-1 px-5 py-3 rounded-2xl border border-empower-200 dark:border-empower-600 bg-white dark:bg-empower-700 text-empower-800 dark:text-empower-100 placeholder:text-empower-300 dark:placeholder:text-empower-500 focus:outline-none focus:ring-2 focus:ring-empower-400 dark:focus:ring-empower-500 focus:border-transparent disabled:bg-empower-50 dark:disabled:bg-empower-800 disabled:text-empower-300 dark:disabled:text-empower-600 transition-shadow resize-none overflow-hidden"
+          className="input-sky flex-1 px-5 py-3 rounded-2xl border border-empower-200 dark:border-empower-600 bg-white dark:bg-empower-700 text-empower-800 dark:text-empower-100 placeholder:text-empower-300 dark:placeholder:text-empower-500 disabled:bg-empower-50 dark:disabled:bg-empower-800 disabled:text-empower-300 dark:disabled:text-empower-600 transition-shadow resize-none overflow-hidden"
           style={{ maxHeight: '96px' }}
         />
         <button
