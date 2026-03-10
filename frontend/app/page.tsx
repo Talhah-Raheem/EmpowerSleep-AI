@@ -309,7 +309,7 @@ export default function ChatPage() {
         </button>
       </div>
       <p className="text-xs text-empower-400 dark:text-empower-500 text-center mt-2">
-        Educational information only. Not medical advice.{' '}
+        Educational information only. Not medical advice. AI can make mistakes — verify with a healthcare professional.{' '}
         By using, you accept{' '}
         <a href="https://www.empowersleep.com/terms-of-use" target="_blank" rel="noopener noreferrer" className="underline hover:text-empower-600 dark:hover:text-empower-300">Terms</a>
         {' & '}
