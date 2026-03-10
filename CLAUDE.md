@@ -2,6 +2,10 @@
 
 This file contains technical details about the codebase for Claude Code.
 
+## Rules for Claude
+
+- **Never commit or push to GitHub directly.** Claude must only provide the git commands for the user to run themselves. This applies to all git operations: commits, pushes, force-pushes, merges, rebases, and PRs.
+
 ## Architecture Overview
 
 This is a **RAG chatbot** for sleep education with a split architecture:
