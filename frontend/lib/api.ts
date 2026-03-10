@@ -192,6 +192,7 @@ export async function getSuggestions(
   message: string,
   response: string,
   history?: Message[],
+  signal?: AbortSignal,
 ): Promise<string[]> {
   try {
     const res = await fetch(`${API_BASE_URL}/suggestions`, {
@@ -202,6 +203,7 @@ export async function getSuggestions(
         response,
         history: history?.map((m) => ({ role: m.role, content: m.content })) ?? [],
       }),
+      signal,
     });
     const data = await res.json();
     return data.suggestions ?? [];

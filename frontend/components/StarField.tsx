@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface Star {
   x: number;
@@ -30,25 +30,36 @@ const STARS = generateStars(120);
 
 export function StarField() {
   const [shootingStar, setShootingStar] = useState<ShootingStar | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
+    let outerTimer: ReturnType<typeof setTimeout>;
+    let innerTimer: ReturnType<typeof setTimeout>;
+
     const schedule = () => {
-      const delay = 12000 + Math.random() * 8000; // every 12–20s
-      return setTimeout(() => {
+      const delay = 12000 + Math.random() * 8000;
+      outerTimer = setTimeout(() => {
+        if (!mountedRef.current) return;
         setShootingStar({
-          x: Math.random() * 60,  // start in left 60% of screen
-          y: Math.random() * 40,  // start in top 40% of screen
+          x: Math.random() * 60,
+          y: Math.random() * 40,
           key: Date.now(),
         });
-        setTimeout(() => {
+        innerTimer = setTimeout(() => {
+          if (!mountedRef.current) return;
           setShootingStar(null);
           schedule();
         }, 1000);
       }, delay);
     };
 
-    const timer = schedule();
-    return () => clearTimeout(timer);
+    schedule();
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(outerTimer);
+      clearTimeout(innerTimer);
+    };
   }, []);
 
   return (

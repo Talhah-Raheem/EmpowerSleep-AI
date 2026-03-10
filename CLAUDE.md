@@ -22,6 +22,7 @@ User Question
 │  1. User types question in chat UI                      │
 │  2. POST /chat/stream to backend (SSE streaming)        │
 │  3. Tokens stream in live; sources attach on done       │
+│  4. POST /suggestions after done → follow-up chips      │
 └─────────────────────────────────────────────────────────┘
      │
      ▼
@@ -42,20 +43,28 @@ User Question
 ### Backend
 
 **`backend/main.py`** - FastAPI application
-- `POST /chat` - Original non-streaming endpoint (still works, backward compat)
+- `POST /chat` - Original non-streaming endpoint (backward compat)
 - `POST /chat/stream` - SSE streaming endpoint (used by frontend)
+- `POST /suggestions` - Returns 3 LLM-generated follow-up questions after each response
+- `POST /feedback` - Stores thumbs up/down in Supabase with session_id, rating, environment tag
 - `GET /health` - Health check
-- `GET /stats` - Index statistics
-- CORS configured for localhost:3000
+- `GET /stats` - Index statistics broken down by source type
+- CORS configured for localhost:3000, empowersleep.com domains, and `CORS_ORIGINS` env var
 
 **`rag/chat_engine.py`** - Core RAG logic
 - `ChatEngine` class - Main interface
 - `ask_question(message, history)` - Sync, returns (answer, sources) — used by /chat
-- `stream_question(message, history)` - Async generator for /chat/stream
-- `_build_llm_messages(query, context, history)` - Shared by both paths
-- `_async_client` property — lazy AsyncOpenAI instance
+- `stream_question(message, history)` - Async generator for /chat/stream; timeout=30s
+- `_build_search_query()` - Smart follow-up detection:
+  - `AFFIRMATIONS` set — pure "yes/sure/ok" messages search ONLY the last assistant question (not combined with original topic, to avoid diluting the embedding)
+  - Short (≤20 words): combines original question + last assistant question
+  - Medium (21–40 words) with FOLLOWUP_SIGNALS: combines original + current
+  - Long (>40 words): uses current message as-is
+- `_build_llm_messages()` - Injects `AFFIRMATION DETECTED` instruction when current message is a pure affirmation
+- `AFFIRMATIONS` constant — module-level set of affirmation words
+- `FOLLOWUP_SIGNALS` constant — module-level set of follow-up signal words
+- System prompt: non-diagnostic, pattern-based language, strict conversation binding, only offers follow-up questions on topics covered in retrieved context
 - Configuration constants at top of file
-- System prompt enforces educational, non-diagnostic tone
 
 **`rag/ingestion/textbook_ingestor.py`** - PDF ingestion
 - Extracts text from PDFs using PyMuPDF
@@ -69,22 +78,29 @@ User Question
 - `runStream()` — shared streaming logic called by both handleSubmit and handleRegenerate
 - `handleRegenerate(index)` — drops assistant message at index and re-streams
 - `pendingSourcesRef` — holds sources until streaming completes
+- `assistantAddedRef` — tracks whether assistant message was actually added (prevents user message deletion on early stream error)
+- `suggestionsAbortRef` — AbortController for in-flight suggestions fetch; aborted on new chat or new stream start
 - `chatContainerRef` + `userScrolledUpRef` — free-scroll during generation
-- `onWheel` stops auto-scroll immediately on upward scroll; `onScroll` resumes when back at bottom
-- Logo/title links to https://www.empowersleep.com/
+- `onWheel` stops auto-scroll immediately on upward scroll; `onScroll` resumes when within 30px of bottom
+- Hero landing page (no messages): night sky / sunrise gradient, stars, centered input + sample questions
+- Chat view (messages exist): same gradient persists, frosted glass header + footer
+- Follow-up suggestion chips appear below messages after each response; clicking pre-fills input
 
 **`frontend/components/`**
-- `ChatMessage.tsx` - Message bubble; `streaming` prop shows blinking cursor; `onRegenerate` prop shows ↺ button
+- `ChatMessage.tsx` - Message bubble; `streaming` prop shows blinking cursor; `onRegenerate` prop shows ↺ button; feedback thumbs up/down; assistant bubbles are full-width frosted glass
 - `SourceCard.tsx` - Source citation display; blog/notion sources show EmpowerLogo + link; textbook shows static card
 - `SleepLoader.tsx` - Branded loading animation (shows until first streaming token)
+- `StarField.tsx` - 120 twinkling stars + shooting star every 12–20s (dark mode only); both timers cleaned up on unmount with `mountedRef` guard
 
 **`frontend/lib/`**
-- `api.ts` - `sendMessage()` (non-streaming) + `streamMessage()` (SSE callbacks: onToken, onSources, onDone, onError)
+- `api.ts` - `sendMessage()` (non-streaming) + `streamMessage()` (SSE) + `getSuggestions(message, response, history, signal?)` + `submitFeedback()`
 - `sleepThoughts.ts` - Calm messages shown during loading
-- `sampleQuestions.ts` - Rotating sample questions for welcome screen
+- `sampleQuestions.ts` - 33 rotating sample questions: general sleep education + EmpowerSleep program questions (Foundation, Optimization, Longevity, pricing, testing philosophy)
 
 **`frontend/app/globals.css`**
-- `animate-blink` keyframe — used by streaming cursor in ChatMessage
+- `animate-blink` keyframe — streaming cursor
+- `twinkle` / `shoot` keyframes — star animations
+- `.input-sky:focus` — blue glow (dark mode), amber glow (light mode)
 
 ### Scripts
 
@@ -103,12 +119,21 @@ User Question
 - Merges with existing index
 - Tracks via manifest for idempotency
 
-**`scripts/ingest_notion_export.py`** ← NEW
+**`scripts/ingest_notion_export.py`**
 - Ingests Notion markdown export from `data/raw/empower_sleep_notion/`
 - Cleans Notion-exported markdown (strips image refs, flattens internal links)
 - Chunks at ~400 words (smaller than blog — Notion pages are shorter)
 - Source type: `"notion"` — displays with EmpowerLogo linking to empowersleep.com
 - Run with `--rebuild` to replace previously ingested Notion content
+
+## RAG Index State
+
+| Source | Chunks | Notes |
+|--------|--------|-------|
+| Blog | 148 | No `source` field — identified by `url` presence, defaults to "blog" |
+| Textbook | 154 | `source: "textbook"` — Sleep_And_Health.pdf |
+| Notion | 40 | `source: "notion"` — 12 pages from empower_sleep_notion/ |
+| **Total** | **342** | FAISS IndexFlatIP (cosine similarity) |
 
 ## Configuration
 
@@ -122,6 +147,9 @@ All config is in `rag/chat_engine.py`:
 | LLM Model | `gpt-4o-mini` |
 | LLM Temperature | 0.3 |
 | Max Tokens | 750 |
+| Stream Timeout | 30s |
+| Suggestions Timeout | 10s |
+| Max History Turns | 3 |
 
 ## Data Flow
 
@@ -135,9 +163,10 @@ All config is in `rag/chat_engine.py`:
 
 ### System Prompt
 - **Non-diagnostic**: Never labels user with conditions
-- Uses pattern-based language ("This is often associated with...")
-- Asks clarifying questions when context is incomplete
-- Maintains conversation continuity
+- Pattern-based language ("This is often associated with...")
+- Strict conversation binding: "yes/sure/ok" = affirm last question; must deliver exactly what was offered
+- Only offers follow-up questions on topics present in the retrieved context
+- SYMPTOM–MECHANISM ALIGNMENT: matches explanation direction to what user described
 
 ### Source Types
 - **Blog**: `{source_type: "blog", title, url}` — EmpowerLogo + link
@@ -153,6 +182,17 @@ data: [DONE]
 ```
 Sources are sent before the first token. Disclaimer is yielded as the final token.
 
+### Follow-up Suggestions
+- After `[DONE]`, frontend calls `POST /suggestions` with the user message + history
+- Backend sends to GPT-4o-mini: returns 3 short contextual questions
+- Rendered as clickable chips below the last message
+- Fetch is aborted if user starts a new chat or sends another message
+- Suggestions timeout: 10s on backend
+
+### Feedback
+- Thumbs up (1) / thumbs down (-1) stored in Supabase `feedback` table
+- Row includes: session_id, user_question, ai_response, rating, environment (dev/prod via `APP_ENV`)
+
 ## Dependencies
 
 ### Python (requirements.txt)
@@ -160,10 +200,12 @@ Sources are sent before the first token. Disclaimer is yielded as the final toke
 - `openai` - Embeddings + LLM (sync + async)
 - `fastapi` + `uvicorn` - Backend API
 - `PyMuPDF` - PDF extraction
+- `supabase` - Feedback storage
 - `python-dotenv` - Environment variables
 
 ### Node.js (frontend/package.json)
-- `next` - React framework
+- `next` 14.1.0 - React framework
+- `next-themes` - Dark mode provider
 - `react-markdown` - Markdown rendering
 - `tailwindcss` - Styling
 
@@ -187,6 +229,9 @@ Open http://localhost:3000
 **Backend (.env)**
 ```
 OPENAI_API_KEY=sk-...
+SUPABASE_URL=https://...
+SUPABASE_SECRET_KEY=...
+APP_ENV=development
 ```
 
 **Frontend (frontend/.env.local)**
@@ -227,81 +272,41 @@ Edit `SYSTEM_PROMPT` in `rag/chat_engine.py`
 
 Both frontend and backend are deployed on Railway as separate services.
 
-### Prerequisites
-- Railway account (railway.app)
-- GitHub repo with code pushed
-- `rag_artifacts/` folder committed (contains FAISS index)
-
-### Step 1: Create Railway Project
-1. Go to railway.app → New Project → Deploy from GitHub
-2. Select your repository
-3. This creates the first service (backend by default)
-
-### Step 2: Configure Backend Service
-1. In Railway dashboard, click on the service
-2. Go to Settings → change name to "backend"
-3. Add environment variables:
-   - `OPENAI_API_KEY` = your OpenAI key
-   - `CORS_ORIGINS` = (leave empty for now, add frontend URL later)
-4. Railway auto-detects Python from `requirements.txt` and uses `Procfile`
-5. Deploy and copy the generated URL (e.g., `https://backend-xxx.up.railway.app`)
-
-### Step 3: Add Frontend Service
-1. In Railway project, click "New" → "GitHub Repo" → same repo
-2. Go to Settings:
-   - Change name to "frontend"
-   - Set Root Directory to `frontend`
-3. Add environment variable:
-   - `NEXT_PUBLIC_API_BASE_URL` = backend URL from Step 2
-4. Deploy and copy the frontend URL
-
-### Step 4: Update Backend CORS
-1. Go back to backend service in Railway
-2. Add environment variable:
-   - `CORS_ORIGINS` = frontend URL (e.g., `https://frontend-xxx.up.railway.app`)
-3. Redeploy backend
-
-### Environment Variables Summary
-
-**Backend Service:**
+**Backend Service env vars:**
 | Variable | Value |
 |----------|-------|
 | `OPENAI_API_KEY` | sk-... |
+| `SUPABASE_URL` | https://... |
+| `SUPABASE_SECRET_KEY` | ... |
 | `CORS_ORIGINS` | https://frontend-xxx.up.railway.app |
+| `APP_ENV` | production |
 
-**Frontend Service:**
+**Frontend Service env vars:**
 | Variable | Value |
 |----------|-------|
 | `NEXT_PUBLIC_API_BASE_URL` | https://backend-xxx.up.railway.app |
 
-### Custom Domain (Optional)
-1. In Railway service settings → Domains
-2. Add custom domain and configure DNS
+## Planned / Next Steps
 
-## Planned Enhancements
+### Done ✓
+- [x] SSE streaming with sources-first delivery
+- [x] Notion ingestion (programs, pricing, team, FAQs)
+- [x] Feedback buttons (thumbs up/down) → Supabase
+- [x] Follow-up question suggestions (LLM-generated chips after each response)
+- [x] Night sky / sunrise hero landing page with StarField
+- [x] Full-width frosted glass assistant bubbles
+- [x] Terms & Privacy links in disclaimer footer
+- [x] Smart affirmation detection (pure "yes" searches only the offered topic)
+- [x] AI only offers follow-ups on topics it has context for
 
-### No Database Required
-- [ ] Follow-up question suggestions after each answer
-- [ ] Export conversation as PDF (client-side rendering)
-- [ ] Guided sleep assessment questionnaire mode (hardcoded question flow)
-
-### Requires Database
-- [ ] Feedback buttons (thumbs up/down) with storage
-- [ ] Shareable conversation links
-- [ ] User accounts / saved conversation history
+### Up Next
+- [ ] **Cookie/consent banner** — needed before adding analytics
+- [ ] **Analytics** (PostHog free tier) — understand what users ask
+- [ ] **Error monitoring** (Sentry free tier) — catch production errors
+- [ ] **Refresh blog index** — scrape + rebuild since last run was March 2026
+- [ ] **Guided sleep assessment mode** — hardcoded question flow for exploratory users
 
 ### Bigger Features
-- [ ] Voice conversations (voice input + AI voice output, full conversational mode — do last)
-
-## Structure for Growth
-
-### Must-haves Before Going Public
-- [ ] **Privacy Policy** page — required since user health-related questions are sent to OpenAI
-- [ ] **Terms of Service** page — legally protect the "not medical advice" disclaimer
-- [ ] **Cookie/consent banner** — needed if analytics are added
-
-### Infrastructure
-- [ ] **Database** (Supabase or Railway Postgres) — unlocks feedback storage, conversation history, shareable links, analytics
-- [ ] **Auth** (even optional/anonymous) — for user accounts, saved chats, usage limits
-- [ ] **Error monitoring** (Sentry free tier) — know when things break in production
-- [ ] **Analytics** (PostHog or Plausible free tier) — understand what users actually ask
+- [ ] Shareable conversation links (requires DB work)
+- [ ] User accounts / saved conversation history
+- [ ] Voice conversations (do last)

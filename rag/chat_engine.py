@@ -657,6 +657,7 @@ Instructions:
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
             stream=True,
+            timeout=30,
         )
 
         async for chunk in stream:
