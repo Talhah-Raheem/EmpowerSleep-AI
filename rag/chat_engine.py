@@ -62,6 +62,13 @@ DISCLAIMER_SUFFIX = "\n\n---\n*Educational information only. Not medical advice.
 MAX_HISTORY_TURNS = 3
 
 # Signals that indicate a follow-up message referencing a prior topic
+# Words that mean "yes, tell me more" — used to detect pure affirmations
+AFFIRMATIONS = {
+    "yes", "yeah", "yep", "yup", "ya", "yuh", "yea", "sure", "ok", "okay",
+    "please", "bet", "mhm", "fs", "definitely", "absolutely", "of course",
+    "go ahead", "tell me", "go on", "sounds good", "sure thing", "please do",
+}
+
 FOLLOWUP_SIGNALS = {
     "also", "and also", "what about", "how about", "additionally",
     "on top of that", "besides", "along with", "as well", "in addition",
@@ -128,10 +135,12 @@ IF THE CONTEXT DOESN'T FULLY ANSWER THE QUESTION:
 - Provide what IS relevant from the context.
 - Then ask ONE specific follow-up question that would help you give a better answer.
 - Example: "To give you more tailored guidance—are you having trouble falling asleep initially, or waking up during the night?"
+- CRITICAL: Only offer to elaborate on topics that ARE covered in the provided context. Never offer to provide information that isn't there. If you don't have content on something (e.g., specific product brands), do not offer to discuss it.
 
 STRICT CONVERSATION BINDING:
 - When the user replies after your question, their reply MUST be interpreted as answering that specific question.
-- Casual affirmations like "yuh," "yep," "ya," "sure," "bet," "yeah," "mhm," "ok," "yea," "fs" ALL mean "yes." Treat them as a positive answer to your last question and provide the information you offered.
+- Casual affirmations like "yuh," "yep," "ya," "sure," "bet," "yeah," "mhm," "ok," "yea," "fs" ALL mean "yes." Treat them as a positive answer to your last question and provide SPECIFICALLY the information you offered — not adjacent or related content, but the exact thing you asked about.
+- If the user says "yes" to "Would you like to know more about X?", your next response must be about X and nothing else.
 - Do NOT reinterpret vague phrases into new behaviors or topics.
 - Do NOT introduce new concepts (naps, new symptoms, new habits) unless the user EXPLICITLY mentions them.
 - Ambiguous phrases like "another," "sometimes," "it depends," "a few" MUST be resolved using your last question as context.
@@ -449,12 +458,17 @@ class ChatEngine:
         word_count = len(current_message.split())
 
         # Path 1: Short messages (≤20 words) — affirmations, brief clarifications, short follow-ups
-        # Raised from 10 → 20 to catch medium-length follow-ups (e.g., 12-word messages)
         if word_count <= 20 and last_assistant_msg:
             clean = last_assistant_msg.split("---")[0].strip()
             if "?" in clean:
                 last_question = clean.rsplit("?", 1)[0].rsplit(".", 1)[-1].strip()
                 if last_question:
+                    # Pure affirmations (yes/sure/ok): search ONLY for the offered topic.
+                    # Combining with original_question dilutes the embedding and retrieves
+                    # the wrong chunks (original topic dominates over the offered subtopic).
+                    is_affirmation = current_message.lower().strip(".,!? ") in AFFIRMATIONS
+                    if is_affirmation:
+                        return last_question
                     return f"{original_question} {last_question}"
             return f"{original_question} {current_message}"
 
@@ -555,6 +569,12 @@ class ChatEngine:
 
 """
 
+        # Detect if the current message is a pure affirmation
+        is_affirmation = query.lower().strip(".,!? ") in AFFIRMATIONS
+        affirmation_instruction = ""
+        if is_affirmation:
+            affirmation_instruction = "\n7. **AFFIRMATION DETECTED**: The user said yes to your previous offer. You MUST answer specifically and only what you offered in your last message. Do not pivot to adjacent or related content — deliver exactly what you said you would."
+
         user_message = f"""Answer the user's sleep-related question using the educational content and conversation history below.
 {history_section}
 === CONTEXT FROM EMPOWERSLEEP ===
@@ -569,7 +589,7 @@ Instructions:
 3. If the user's message contains multiple questions or topics, address ALL of them. If one has less context, acknowledge it briefly rather than skipping it.
 4. **CRITICAL - BUILD ON THE CONVERSATION, DO NOT REPEAT IT**: If there is conversation history, go DEEPER than your previous response — add new information, a mechanism, a practical step, or a nuance not yet covered. Do NOT restate or rephrase what you already told them.
 5. If the user answered a clarifying question, use their answer to ADVANCE into more specific, targeted guidance. Do not restart from a general overview.
-6. Keep it concise and easy to read. Short paragraphs or bullets are preferred."""
+6. Keep it concise and easy to read. Short paragraphs or bullets are preferred.{affirmation_instruction}"""
 
         return [
             {"role": "system", "content": SYSTEM_PROMPT},
