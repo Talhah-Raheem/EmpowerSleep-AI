@@ -334,6 +334,7 @@ async def get_suggestions(request: SuggestionsRequest):
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=120,
+            timeout=10,
         )
 
         text = completion.choices[0].message.content or ""

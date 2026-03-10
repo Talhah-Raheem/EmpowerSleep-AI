@@ -48,6 +48,8 @@ export default function ChatPage() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
   const sessionIdRef = useRef<string>(crypto.randomUUID());
+  const assistantAddedRef = useRef(false);
+  const suggestionsAbortRef = useRef<AbortController | null>(null);
 
   // Immediately stop auto-scroll when user scrolls up (fires before scroll event)
   const handleWheel = (e: React.WheelEvent) => {
@@ -87,6 +89,8 @@ export default function ChatPage() {
   const runStream = async (userMessageText: string, historySnapshot: Message[]) => {
     pendingSourcesRef.current = [];
     userScrolledUpRef.current = false;
+    assistantAddedRef.current = false;
+    suggestionsAbortRef.current?.abort();
     setSuggestions([]);
 
     let firstToken = true;
@@ -103,6 +107,7 @@ export default function ChatPage() {
           onToken: (text) => {
             if (firstToken) {
               firstToken = false;
+              assistantAddedRef.current = true;
               setIsLoading(false);
               setIsStreaming(true);
               setMessages((prev) => [
@@ -126,14 +131,20 @@ export default function ChatPage() {
               updated[updated.length - 1] = { ...last, sources: pendingSourcesRef.current };
               return updated;
             });
-            // Fetch follow-up suggestions in the background
-            getSuggestions(userMessageText, '', historySnapshot).then(setSuggestions);
+            // Fetch follow-up suggestions, cancellable if user starts a new chat
+            const abortController = new AbortController();
+            suggestionsAbortRef.current = abortController;
+            getSuggestions(userMessageText, '', historySnapshot, abortController.signal).then(setSuggestions);
           },
           onError: (err) => {
             setIsStreaming(false);
             setIsLoading(false);
             setError(err.message);
-            setMessages((prev) => prev.slice(0, -1));
+            // Only remove the last message if the assistant message was actually added
+            if (assistantAddedRef.current) {
+              setMessages((prev) => prev.slice(0, -1));
+            }
+            assistantAddedRef.current = false;
           },
         },
       );
@@ -225,6 +236,8 @@ export default function ChatPage() {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    suggestionsAbortRef.current?.abort();
+    suggestionsAbortRef.current = null;
     setMessages([]);
     setError(null);
     setIsLoading(false);
