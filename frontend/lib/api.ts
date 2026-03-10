@@ -186,6 +186,31 @@ export async function submitFeedback(
 }
 
 /**
+ * Fetch 3 follow-up question suggestions after an AI response.
+ */
+export async function getSuggestions(
+  message: string,
+  response: string,
+  history?: Message[],
+): Promise<string[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/suggestions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        response,
+        history: history?.map((m) => ({ role: m.role, content: m.content })) ?? [],
+      }),
+    });
+    const data = await res.json();
+    return data.suggestions ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Format a source for display.
  *
  * Textbook: 📖 **Title** – Chapter X (pp. Y–Z)
