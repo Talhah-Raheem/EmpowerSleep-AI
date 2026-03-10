@@ -85,6 +85,13 @@ class FeedbackRequest(BaseModel):
     rating: int  # 1 = thumbs up, -1 = thumbs down
 
 
+class SuggestionsRequest(BaseModel):
+    """Request model for follow-up suggestions endpoint."""
+    message: str
+    response: str
+    history: list[dict] = []
+
+
 # =============================================================================
 # FASTAPI APP
 # =============================================================================
@@ -295,6 +302,45 @@ async def submit_feedback(request: FeedbackRequest):
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save feedback: {str(e)}")
+
+
+@app.post("/suggestions", tags=["Chat"])
+async def get_suggestions(request: SuggestionsRequest):
+    """
+    Generate 3 follow-up question suggestions based on the conversation.
+    """
+    try:
+        engine = get_chat_engine()
+        client = engine._async_client
+
+        history_text = ""
+        for turn in request.history[-4:]:
+            role = turn.get("role", "")
+            content = turn.get("content", "")
+            history_text += f"{role.capitalize()}: {content}\n\n"
+
+        prompt = (
+            "Based on this sleep-related conversation, suggest exactly 3 short follow-up questions "
+            "the user might want to ask next. Questions should dig deeper into what was just discussed.\n\n"
+            f"{history_text}"
+            f"User: {request.message}\n"
+            f"Assistant: {request.response}\n\n"
+            "Return exactly 3 questions, one per line, no numbering, no bullet points. "
+            "Keep each question under 12 words."
+        )
+
+        completion = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=120,
+        )
+
+        text = completion.choices[0].message.content or ""
+        questions = [q.strip() for q in text.strip().split("\n") if q.strip()][:3]
+        return {"suggestions": questions}
+    except Exception:
+        return {"suggestions": []}
 
 
 @app.get("/stats", tags=["System"])

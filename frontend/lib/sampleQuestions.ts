@@ -43,6 +43,18 @@ export const SAMPLE_QUESTIONS: string[] = [
   "How does sleep affect mental health?",
   "Can poor sleep affect my immune system?",
   "Why is sleep important for memory?",
+
+  // EmpowerSleep programs & approach
+  "What programs does EmpowerSleep offer?",
+  "How is EmpowerSleep different from a regular sleep clinic?",
+  "What is the Sleep Foundation program?",
+  "What does the Sleep Optimization program include?",
+  "Who is the Sleep Longevity program for?",
+  "Why does EmpowerSleep test sleep over weeks instead of one night?",
+  "What does multi-validation sleep testing mean?",
+  "Does EmpowerSleep accept insurance?",
+  "How much does a sleep program at EmpowerSleep cost?",
+  "What happens after I finish a sleep program?",
 ];
 
 /**

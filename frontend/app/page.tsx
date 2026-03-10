@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, FormEvent } from 'react';
 import { useTheme } from 'next-themes';
-import { Message, Source, streamMessage, submitFeedback } from '@/lib/api';
+import { Message, Source, streamMessage, submitFeedback, getSuggestions } from '@/lib/api';
 import { getRandomQuestions } from '@/lib/sampleQuestions';
 import { ChatMessage } from '@/components/ChatMessage';
 import { SleepLoader } from '@/components/SleepLoader';
@@ -30,6 +30,7 @@ export default function ChatPage() {
   const [sampleQuestions, setSampleQuestions] = useState<string[]>([]);
   const [mounted, setMounted] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   const { theme, setTheme } = useTheme();
 
@@ -86,6 +87,7 @@ export default function ChatPage() {
   const runStream = async (userMessageText: string, historySnapshot: Message[]) => {
     pendingSourcesRef.current = [];
     userScrolledUpRef.current = false;
+    setSuggestions([]);
 
     let firstToken = true;
 
@@ -124,6 +126,8 @@ export default function ChatPage() {
               updated[updated.length - 1] = { ...last, sources: pendingSourcesRef.current };
               return updated;
             });
+            // Fetch follow-up suggestions in the background
+            getSuggestions(userMessageText, '', historySnapshot).then(setSuggestions);
           },
           onError: (err) => {
             setIsStreaming(false);
@@ -409,6 +413,31 @@ export default function ChatPage() {
               onFeedback={message.role === 'assistant' ? (rating) => handleFeedback(index, rating) : undefined}
             />
           ))}
+
+          {/* Follow-up suggestions */}
+          {suggestions.length > 0 && !isLoading && !isStreaming && (
+            <div className="flex flex-wrap gap-2 animate-fade-in">
+              {suggestions.map((q) => (
+                <button
+                  key={q}
+                  onClick={() => {
+                    setSuggestions([]);
+                    setInput(q);
+                    setTimeout(() => {
+                      if (inputRef.current) {
+                        inputRef.current.focus();
+                        inputRef.current.style.height = 'auto';
+                        inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 96) + 'px';
+                      }
+                    }, 0);
+                  }}
+                  className="px-4 py-2 text-sm bg-white/20 dark:bg-white/10 backdrop-blur-sm border border-white/30 dark:border-white/20 rounded-full text-empower-800 dark:text-empower-100 hover:bg-white/30 dark:hover:bg-white/20 transition-colors"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Loading indicator */}
           {isLoading && <SleepLoader />}
