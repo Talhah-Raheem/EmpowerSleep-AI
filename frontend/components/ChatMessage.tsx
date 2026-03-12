@@ -4,6 +4,7 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Message } from '@/lib/api';
 import { SourceList } from './SourceCard';
+import { trackEvent } from '@/lib/analytics';
 
 interface ChatMessageProps {
   message: Message;
@@ -96,6 +97,7 @@ export function ChatMessage({ message, streaming, onRegenerate, onFeedback }: Ch
                   if (feedback !== null) return;
                   setFeedback(1);
                   onFeedback(1);
+                  trackEvent('feedback_thumbs_up');
                 }}
                 disabled={feedback !== null}
                 title="Helpful"
@@ -115,6 +117,7 @@ export function ChatMessage({ message, streaming, onRegenerate, onFeedback }: Ch
                   if (feedback !== null) return;
                   setFeedback(-1);
                   onFeedback(-1);
+                  trackEvent('feedback_thumbs_down');
                 }}
                 disabled={feedback !== null}
                 title="Not helpful"
@@ -133,7 +136,7 @@ export function ChatMessage({ message, streaming, onRegenerate, onFeedback }: Ch
           )}
           {onRegenerate && (
             <button
-              onClick={onRegenerate}
+              onClick={() => { trackEvent('regenerate_clicked'); onRegenerate(); }}
               title="Regenerate response"
               className="flex items-center gap-1 text-xs text-empower-400 dark:text-empower-500 hover:text-empower-600 dark:hover:text-empower-300 transition-colors ml-auto"
             >

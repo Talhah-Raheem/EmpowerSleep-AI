@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { Open_Sans, Poppins } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
+import { AnalyticsProvider } from './providers'
+import { CookieBanner } from '@/components/CookieBanner'
 import './globals.css'
 
 const openSans = Open_Sans({
@@ -34,7 +36,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${openSans.variable} ${poppins.variable} font-sans`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {children}
+          <AnalyticsProvider>
+            {children}
+            <CookieBanner />
+          </AnalyticsProvider>
         </ThemeProvider>
       </body>
     </html>

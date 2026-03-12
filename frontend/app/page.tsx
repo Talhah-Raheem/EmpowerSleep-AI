@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, FormEvent } from 'react';
 import { useTheme } from 'next-themes';
 import { Message, Source, streamMessage, submitFeedback, getSuggestions } from '@/lib/api';
-import { getRandomQuestions } from '@/lib/sampleQuestions';
+import { getRandomQuestions } from '@/lib/sampleQuestions'
+import { trackEvent } from '@/lib/analytics';
 import { ChatMessage } from '@/components/ChatMessage';
 import { SleepLoader } from '@/components/SleepLoader';
 import { EmpowerLogo } from '@/components/EmpowerLogo';
@@ -140,6 +141,7 @@ export default function ChatPage() {
             setIsStreaming(false);
             setIsLoading(false);
             setError(err.message);
+            trackEvent('stream_error', { error: err.message });
             // Only remove the last message if the assistant message was actually added
             if (assistantAddedRef.current) {
               setMessages((prev) => prev.slice(0, -1));
@@ -178,6 +180,7 @@ export default function ChatPage() {
 
     setMessages((prev) => [...prev, { role: 'user', content: trimmedInput }]);
     setIsLoading(true);
+    trackEvent('question_asked', { message_length: trimmedInput.length, has_history: messages.length > 0 });
 
     await runStream(trimmedInput, historySnapshot);
   };
@@ -225,6 +228,7 @@ export default function ChatPage() {
   const handleDemoClick = (question: string) => {
     setInput(question);
     inputRef.current?.focus();
+    trackEvent('sample_question_clicked', { question });
   };
 
   /**
@@ -242,6 +246,7 @@ export default function ChatPage() {
     setError(null);
     setIsLoading(false);
     setIsStreaming(false);
+    trackEvent('new_conversation_started');
     // Show fresh sample questions
     setSampleQuestions(getRandomQuestions(3));
     inputRef.current?.focus();
@@ -436,6 +441,7 @@ export default function ChatPage() {
                   onClick={() => {
                     setSuggestions([]);
                     setInput(q);
+                    trackEvent('suggestion_clicked', { suggestion: q });
                     setTimeout(() => {
                       if (inputRef.current) {
                         inputRef.current.focus();
