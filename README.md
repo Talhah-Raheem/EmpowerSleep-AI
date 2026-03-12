@@ -5,7 +5,7 @@ EmpowerSleep AI is an intelligent sleep assistant designed to help users underst
 
 The system uses **Retrieval-Augmented Generation (RAG)** to provide responses grounded in trusted sleep resources and EmpowerSleep educational content.
 
-🌐 **Visit:** https://empowersleep.ai
+🌐 **Visit:** www.empowersleep.ai
 
 ---
 
