@@ -101,16 +101,6 @@ Users experiencing severe sleep issues are encouraged to consult healthcare prof
 
 ---
 
-# Getting Started
-
-Visit the live application:
-
-👉 **https://empowersleep.ai**
-
-Ask a sleep question and explore how AI can help you better understand your sleep.
-
----
-
 # Feedback
 
 User feedback helps improve the system.
