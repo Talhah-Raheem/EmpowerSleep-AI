@@ -105,6 +105,25 @@ export default function ChatPage() {
     setFilePreviewUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const imageItems = Array.from(e.clipboardData.items).filter((item) =>
+      item.type.startsWith('image/'),
+    );
+    if (!imageItems.length) return;
+    const remaining = Math.max(0, 5 - attachedFiles.length);
+    imageItems.slice(0, remaining).forEach((item) => {
+      const file = item.getAsFile();
+      if (!file) return;
+      const ext = item.type.split('/')[1] || 'png';
+      const named = new File([file], `pasted-image-${Date.now()}.${ext}`, { type: item.type });
+      const url = URL.createObjectURL(named);
+      setAttachedFiles((prev) => [...prev, named]);
+      setFilePreviewUrls((prev) => [...prev, url]);
+    });
+    // Only prevent default if we captured images (let text paste through normally)
+    if (imageItems.length > 0) e.preventDefault();
+  };
+
   /**
    * Core streaming logic shared by handleSubmit and handleRegenerate.
    * Assumes the user message is already in `messages` state.
@@ -375,6 +394,7 @@ export default function ChatPage() {
           placeholder="Ask me about sleep..."
           disabled={isLoading || isStreaming}
           rows={1}
+          onPaste={handlePaste}
           className="input-sky flex-1 px-5 py-3 rounded-2xl border border-empower-200 dark:border-empower-600 bg-white dark:bg-empower-700 text-empower-800 dark:text-empower-100 placeholder:text-empower-300 dark:placeholder:text-empower-500 disabled:bg-empower-50 dark:disabled:bg-empower-800 disabled:text-empower-300 dark:disabled:text-empower-600 transition-shadow resize-none overflow-hidden"
           style={{ maxHeight: '96px' }}
         />

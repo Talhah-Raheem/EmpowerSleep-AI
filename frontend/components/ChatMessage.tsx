@@ -17,6 +17,7 @@ export function ChatMessage({ message, streaming, onRegenerate, onFeedback }: Ch
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<1 | -1 | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(message.content);
@@ -25,12 +26,68 @@ export function ChatMessage({ message, streaming, onRegenerate, onFeedback }: Ch
   };
 
   if (isUser) {
+    const hasAttachments = message.attachments && message.attachments.length > 0;
     return (
-      <div className="flex justify-end animate-fade-in">
-        <div className="max-w-[75%] bg-empower-600/90 backdrop-blur-sm text-white rounded-2xl rounded-br-md shadow-sm px-4 py-3">
-          <p>{message.content}</p>
+      <>
+        <div className="flex justify-end animate-fade-in">
+          <div className="max-w-[75%] bg-empower-600/90 backdrop-blur-sm text-white rounded-2xl rounded-br-md shadow-sm px-4 py-3">
+            {message.content && <p>{message.content}</p>}
+
+            {/* Attachments */}
+            {hasAttachments && (
+              <div className={`flex flex-wrap gap-2 ${message.content ? 'mt-2' : ''}`}>
+                {message.attachments!.map((att, i) =>
+                  att.type === 'image' && att.url ? (
+                    <button
+                      key={i}
+                      onClick={() => setLightboxUrl(att.url!)}
+                      className="rounded-lg overflow-hidden hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-white/50"
+                      aria-label={`View ${att.name}`}
+                    >
+                      <img src={att.url} alt={att.name} className="h-32 w-32 object-cover rounded-lg" />
+                    </button>
+                  ) : (
+                    <div
+                      key={i}
+                      className="flex items-center gap-1.5 bg-white/15 rounded-lg px-2 py-1.5 text-xs text-white/80"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                      </svg>
+                      <span className="max-w-[160px] truncate">{att.name}</span>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+
+        {/* Lightbox */}
+        {lightboxUrl && (
+          <div
+            className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setLightboxUrl(null)}
+          >
+            <div className="relative max-w-5xl max-h-full" onClick={(e) => e.stopPropagation()}>
+              <img
+                src={lightboxUrl}
+                alt="Full size"
+                className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl"
+              />
+              <button
+                onClick={() => setLightboxUrl(null)}
+                className="absolute top-3 right-3 bg-black/60 hover:bg-black/80 text-white rounded-full p-2 transition-colors"
+                aria-label="Close"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 
