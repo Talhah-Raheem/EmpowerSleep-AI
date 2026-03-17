@@ -15,13 +15,14 @@ Or from project root:
     python -m uvicorn backend.main:app --reload --port 8000
 """
 
+import base64
 import json as json_module
 import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -154,6 +155,55 @@ def get_chat_engine() -> ChatEngine:
 
 
 # =============================================================================
+# FILE PROCESSING HELPERS
+# =============================================================================
+
+MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB per file
+MAX_PDF_CHARS = 100_000                  # ~25k tokens
+
+
+def extract_pdf_text(content: bytes) -> str:
+    """Extract all text from a PDF given its raw bytes. Capped at MAX_PDF_CHARS."""
+    try:
+        import fitz  # PyMuPDF
+        doc = fitz.open(stream=content, filetype="pdf")
+        parts = [page.get_text() for page in doc]
+        return "\n\n".join(parts)[:MAX_PDF_CHARS]
+    except Exception:
+        return ""
+
+
+async def process_uploaded_files(files: List[UploadFile]) -> list[dict]:
+    """
+    Read uploaded files and return a list of file_context dicts:
+      - PDF:   {"type": "pdf",   "filename": ..., "text": ...}
+      - Image: {"type": "image", "filename": ..., "base64": ..., "mime_type": ...}
+    Files that are too large or unreadable are silently skipped.
+    """
+    file_context: list[dict] = []
+    for upload in files:
+        if not upload.filename:
+            continue
+        content = await upload.read()
+        if len(content) > MAX_FILE_SIZE_BYTES:
+            continue  # skip files over the size limit
+        ct = upload.content_type or ""
+        if ct == "application/pdf" or upload.filename.lower().endswith(".pdf"):
+            text = extract_pdf_text(content)
+            if text.strip():
+                file_context.append({"type": "pdf", "filename": upload.filename, "text": text})
+        elif ct.startswith("image/"):
+            b64 = base64.b64encode(content).decode("utf-8")
+            file_context.append({
+                "type": "image",
+                "filename": upload.filename,
+                "base64": b64,
+                "mime_type": ct,
+            })
+    return file_context
+
+
+# =============================================================================
 # ENDPOINTS
 # =============================================================================
 
@@ -240,9 +290,15 @@ async def chat(request: ChatMessage):
 
 
 @app.post("/chat/stream", tags=["Chat"])
-async def chat_stream(request: ChatMessage):
+async def chat_stream(
+    message: str = Form(...),
+    history: str = Form("[]"),
+    files: Optional[List[UploadFile]] = File(None),
+):
     """
     Send a message and get a streaming response via Server-Sent Events (SSE).
+
+    Accepts multipart/form-data with optional file attachments (PDF + images).
 
     Events emitted:
     - ``{"type": "sources", "sources": [...]}`` — sent before generation starts
@@ -252,11 +308,25 @@ async def chat_stream(request: ChatMessage):
     """
     engine = get_chat_engine()
 
+    # Parse history from JSON string
+    try:
+        history_list: list[dict] = json_module.loads(history)
+    except Exception:
+        history_list = []
+
+    # Process any uploaded files
+    file_context: Optional[list[dict]] = None
+    if files:
+        processed = await process_uploaded_files([f for f in files if f.filename])
+        if processed:
+            file_context = processed
+
     async def event_generator():
         try:
             async for event_type, data in engine.stream_question(
-                user_message=request.message,
-                history=request.history,
+                user_message=message,
+                history=history_list,
+                file_context=file_context,
             ):
                 if event_type == "sources":
                     payload = json_module.dumps({"type": "sources", "sources": data})

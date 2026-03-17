@@ -51,7 +51,8 @@ EMBEDDING_DIMENSION = 1536
 TOP_K_RESULTS = 6
 
 # LLM configuration
-LLM_MODEL = "gpt-4o-mini"
+LLM_MODEL = "gpt-4o-mini"            # text-only requests
+LLM_MODEL_WITH_FILES = "gpt-4o"      # used when files are attached (better vision + reasoning)
 LLM_TEMPERATURE = 0.3
 LLM_MAX_TOKENS = 750
 
@@ -555,7 +556,8 @@ class ChatEngine:
         self,
         query: str,
         context: str,
-        history: list[dict]
+        history: list[dict],
+        file_context: Optional[list[dict]] = None,
     ) -> list[dict]:
         """Build the messages list for the LLM (shared by sync and async paths)."""
         history_section = ""
@@ -575,13 +577,47 @@ class ChatEngine:
         if is_affirmation:
             affirmation_instruction = "\n7. **AFFIRMATION DETECTED**: The user said yes to your previous offer. You MUST answer specifically and only what you offered in your last message. Do not pivot to adjacent or related content — deliver exactly what you said you would."
 
-        user_message = f"""Answer the user's sleep-related question using the educational content and conversation history below.
+        # Build PDF text sections and collect image entries
+        pdf_sections = ""
+        images: list[dict] = []
+        if file_context:
+            for f in file_context:
+                if f["type"] == "pdf":
+                    pdf_sections += (
+                        f"\n\n=== UPLOADED DOCUMENT: {f['filename']} ===\n"
+                        f"{f['text']}\n"
+                        "=== END DOCUMENT ==="
+                    )
+                elif f["type"] == "image":
+                    images.append(f)
+
+        # Instruction addendum when files are present
+        file_instruction = ""
+        if file_context:
+            has_pdf = any(f["type"] == "pdf" for f in file_context)
+            has_img = any(f["type"] == "image" for f in file_context)
+            if has_pdf and has_img:
+                file_instruction = (
+                    "\n\nThe user has uploaded documents and images. Analyze their content carefully. "
+                    "If their message is vague, ask one specific question about what they want to know."
+                )
+            elif has_pdf:
+                file_instruction = (
+                    "\n\nThe user has uploaded a document. Analyze it carefully and respond to what you find. "
+                    "If their message is vague, ask one specific question about what they want to know from this document."
+                )
+            elif has_img:
+                file_instruction = (
+                    "\n\nThe user has uploaded an image. Analyze it carefully and respond to what you observe."
+                )
+
+        user_text = f"""Answer the user's sleep-related question using the educational content and conversation history below.
 {history_section}
 === CONTEXT FROM EMPOWERSLEEP ===
 {context}
-=== END CONTEXT ===
+=== END CONTEXT ==={pdf_sections}
 
-USER'S CURRENT MESSAGE: {query}
+USER'S CURRENT MESSAGE: {query}{file_instruction}
 
 Instructions:
 1. Answer directly and confidently—no hedging.
@@ -591,9 +627,20 @@ Instructions:
 5. If the user answered a clarifying question, use their answer to ADVANCE into more specific, targeted guidance. Do not restart from a general overview.
 6. Keep it concise and easy to read. Short paragraphs or bullets are preferred.{affirmation_instruction}"""
 
+        # Build user content: plain text or multimodal list (when images present)
+        if images:
+            user_content: list[dict] | str = [{"type": "text", "text": user_text}]
+            for img in images:
+                user_content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{img['mime_type']};base64,{img['base64']}"},
+                })
+        else:
+            user_content = user_text
+
         return [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
+            {"role": "user", "content": user_content},
         ]
 
     def _generate_answer(
@@ -617,7 +664,8 @@ Instructions:
     async def stream_question(
         self,
         user_message: str,
-        history: Optional[list[dict]] = None
+        history: Optional[list[dict]] = None,
+        file_context: Optional[list[dict]] = None,
     ) -> AsyncGenerator[tuple[str, object], None]:
         """
         Async generator that streams the RAG response as (event_type, data) tuples.
@@ -626,6 +674,9 @@ Instructions:
             ("sources", list[dict]) — retrieved sources (before generation starts)
             ("token", str)          — text token from the LLM
             ("done", None)          — signals end of stream
+
+        When file_context is provided, switches to gpt-4o for better vision
+        and document understanding.
         """
         history = history or []
 
@@ -649,10 +700,13 @@ Instructions:
 
         # Step 3: Build prompt and stream from OpenAI
         context = self._format_context(chunks)
-        messages = self._build_llm_messages(user_message, context, history)
+        messages = self._build_llm_messages(user_message, context, history, file_context)
+
+        # Use gpt-4o when files are attached (vision + stronger document reasoning)
+        model = LLM_MODEL_WITH_FILES if file_context else LLM_MODEL
 
         stream = await self.async_client.chat.completions.create(
-            model=LLM_MODEL,
+            model=model,
             messages=messages,
             temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
