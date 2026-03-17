@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, FormEvent } from 'react';
 import { useTheme } from 'next-themes';
-import { Message, Source, streamMessage, submitFeedback, getSuggestions } from '@/lib/api';
+import { Message, MessageAttachment, Source, streamMessage, submitFeedback, getSuggestions } from '@/lib/api';
 import { getRandomQuestions } from '@/lib/sampleQuestions'
 import { trackEvent } from '@/lib/analytics';
 import { ChatMessage } from '@/components/ChatMessage';
@@ -33,6 +33,9 @@ export default function ChatPage() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [filePreviewUrls, setFilePreviewUrls] = useState<(string | null)[]>([]);
+
   const { theme, setTheme } = useTheme();
 
   // Initialize sample questions on mount (client-side only)
@@ -44,6 +47,7 @@ export default function ChatPage() {
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const pendingSourcesRef = useRef<Source[]>([]);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -83,11 +87,29 @@ export default function ChatPage() {
     setTheme(theme === 'dark' ? 'light' : 'dark');
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(e.target.files ?? []);
+    if (!selected.length) return;
+    const remaining = Math.max(0, 5 - attachedFiles.length);
+    const toAdd = selected.slice(0, remaining);
+    const newUrls = toAdd.map((f) => (f.type.startsWith('image/') ? URL.createObjectURL(f) : null));
+    setAttachedFiles((prev) => [...prev, ...toAdd]);
+    setFilePreviewUrls((prev) => [...prev, ...newUrls]);
+    e.target.value = ''; // reset so same file can be re-selected
+  };
+
+  const removeFile = (index: number) => {
+    const url = filePreviewUrls[index];
+    if (url) URL.revokeObjectURL(url);
+    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
+    setFilePreviewUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
   /**
    * Core streaming logic shared by handleSubmit and handleRegenerate.
    * Assumes the user message is already in `messages` state.
    */
-  const runStream = async (userMessageText: string, historySnapshot: Message[]) => {
+  const runStream = async (userMessageText: string, historySnapshot: Message[], files?: File[]) => {
     pendingSourcesRef.current = [];
     userScrolledUpRef.current = false;
     assistantAddedRef.current = false;
@@ -149,6 +171,7 @@ export default function ChatPage() {
             assistantAddedRef.current = false;
           },
         },
+        files,
       );
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
@@ -169,20 +192,35 @@ export default function ChatPage() {
     e.preventDefault();
 
     const trimmedInput = input.trim();
-    if (!trimmedInput || isLoading || isStreaming) return;
+    if ((!trimmedInput && attachedFiles.length === 0) || isLoading || isStreaming) return;
 
     setInput('');
     setError(null);
     if (inputRef.current) inputRef.current.style.height = 'auto';
 
+    // Snapshot and clear files before async work
+    const filesToSend = [...attachedFiles];
+    const urlsSnapshot = [...filePreviewUrls];
+    setAttachedFiles([]);
+    setFilePreviewUrls([]);
+
     abortControllerRef.current = new AbortController();
     const historySnapshot = messages;
 
-    setMessages((prev) => [...prev, { role: 'user', content: trimmedInput }]);
-    setIsLoading(true);
-    trackEvent('question_asked', { message_length: trimmedInput.length, has_history: messages.length > 0 });
+    // Build attachment metadata for message display (rendered in Segment 3)
+    const attachments: MessageAttachment[] | undefined = filesToSend.length > 0
+      ? filesToSend.map((f, i) => ({
+          type: (f.type.startsWith('image/') ? 'image' : 'pdf') as 'image' | 'pdf',
+          name: f.name,
+          url: urlsSnapshot[i] ?? undefined,
+        }))
+      : undefined;
 
-    await runStream(trimmedInput, historySnapshot);
+    setMessages((prev) => [...prev, { role: 'user', content: trimmedInput, ...(attachments && { attachments }) }]);
+    setIsLoading(true);
+    trackEvent('question_asked', { message_length: trimmedInput.length, has_history: messages.length > 0, has_files: filesToSend.length > 0 });
+
+    await runStream(trimmedInput, historySnapshot, filesToSend);
   };
 
   /**
@@ -242,6 +280,10 @@ export default function ChatPage() {
     }
     suggestionsAbortRef.current?.abort();
     suggestionsAbortRef.current = null;
+    // Revoke any pending file preview URLs
+    filePreviewUrls.forEach((url) => { if (url) URL.revokeObjectURL(url); });
+    setAttachedFiles([]);
+    setFilePreviewUrls([]);
     setMessages([]);
     setError(null);
     setIsLoading(false);
@@ -280,7 +322,38 @@ export default function ChatPage() {
 
   const inputForm = (
     <form onSubmit={handleSubmit}>
-      <div className="flex gap-3 items-end">
+      {/* File preview chips */}
+      {attachedFiles.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {attachedFiles.map((file, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-1.5 bg-white/20 dark:bg-white/10 backdrop-blur-sm border border-white/30 dark:border-white/20 rounded-lg px-2 py-1 text-xs text-white"
+            >
+              {file.type.startsWith('image/') && filePreviewUrls[i] ? (
+                <img src={filePreviewUrls[i]!} alt="" className="h-5 w-5 rounded object-cover flex-shrink-0" />
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                </svg>
+              )}
+              <span className="max-w-[120px] truncate">{file.name}</span>
+              <button
+                type="button"
+                onClick={() => removeFile(i)}
+                className="text-white/60 hover:text-white flex-shrink-0 ml-0.5"
+                aria-label={`Remove ${file.name}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2 items-end">
         <textarea
           ref={inputRef}
           value={input}
@@ -294,7 +367,7 @@ export default function ChatPage() {
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
-              if (input.trim() && !isLoading && !isStreaming) {
+              if ((input.trim() || attachedFiles.length > 0) && !isLoading && !isStreaming) {
                 handleSubmit(e as unknown as FormEvent);
               }
             }
@@ -305,14 +378,39 @@ export default function ChatPage() {
           className="input-sky flex-1 px-5 py-3 rounded-2xl border border-empower-200 dark:border-empower-600 bg-white dark:bg-empower-700 text-empower-800 dark:text-empower-100 placeholder:text-empower-300 dark:placeholder:text-empower-500 disabled:bg-empower-50 dark:disabled:bg-empower-800 disabled:text-empower-300 dark:disabled:text-empower-600 transition-shadow resize-none overflow-hidden"
           style={{ maxHeight: '96px' }}
         />
+
+        {/* File attach button */}
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isLoading || isStreaming || attachedFiles.length >= 5}
+          title={attachedFiles.length >= 5 ? 'Max 5 files' : 'Attach PDF or image'}
+          className="p-3 rounded-full border border-empower-200 dark:border-empower-600 text-empower-500 dark:text-empower-400 hover:bg-empower-50 dark:hover:bg-empower-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+          </svg>
+        </button>
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+          multiple
+          className="hidden"
+          onChange={handleFileSelect}
+        />
+
         <button
           type="submit"
-          disabled={!input.trim() || isLoading || isStreaming}
-          className="px-6 py-3 bg-empower-500 dark:bg-empower-600 text-white rounded-full font-medium hover:bg-empower-600 dark:hover:bg-empower-500 disabled:bg-empower-200 dark:disabled:bg-empower-700 disabled:cursor-not-allowed transition-colors shadow-sm"
+          disabled={(!input.trim() && attachedFiles.length === 0) || isLoading || isStreaming}
+          className="px-6 py-3 bg-empower-500 dark:bg-empower-600 text-white rounded-full font-medium hover:bg-empower-600 dark:hover:bg-empower-500 disabled:bg-empower-200 dark:disabled:bg-empower-700 disabled:cursor-not-allowed transition-colors shadow-sm flex-shrink-0"
         >
           Send
         </button>
       </div>
+
       <p className="text-xs text-empower-400 dark:text-empower-500 text-center mt-2">
         Educational information only. Not medical advice. AI can make mistakes — verify with a healthcare professional.{' '}
         By using, you accept{' '}

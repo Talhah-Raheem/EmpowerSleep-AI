@@ -30,12 +30,22 @@ export interface ChatResponse {
 }
 
 /**
+ * File attachment on a user message
+ */
+export interface MessageAttachment {
+  type: 'image' | 'pdf';
+  name: string;
+  url?: string; // object URL for inline image preview
+}
+
+/**
  * Message in conversation history
  */
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
   sources?: Source[];
+  attachments?: MessageAttachment[];
 }
 
 /**
@@ -100,14 +110,22 @@ export async function streamMessage(
   history?: Message[],
   signal?: AbortSignal,
   callbacks?: StreamCallbacks,
+  files?: File[],
 ): Promise<void> {
+  // Backend expects multipart/form-data (supports optional file attachments)
+  const formData = new FormData();
+  formData.append('message', message);
+  formData.append(
+    'history',
+    JSON.stringify(history?.map((m) => ({ role: m.role, content: m.content })) ?? []),
+  );
+  if (files?.length) {
+    files.forEach((f) => formData.append('files', f));
+  }
+
   const response = await fetch(`${API_BASE_URL}/chat/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message,
-      history: history?.map((m) => ({ role: m.role, content: m.content })),
-    }),
+    body: formData, // browser sets Content-Type + multipart boundary automatically
     signal,
   });
 
