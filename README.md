@@ -1,133 +1,111 @@
-# EmpowerSleep
+# EmpowerSleep AI  
+### Personalized sleep guidance powered by AI and evidence-based sleep science
 
-AI-powered sleep education chatbot for [empowersleep.com](https://www.empowersleep.com). Answers sleep questions grounded in expert content from the EmpowerSleep blog, textbooks, and program materials.
+EmpowerSleep AI is an intelligent sleep assistant designed to help users understand their sleep patterns, improve sleep quality, and build healthier nighttime habits.
 
-**Live at**: https://www.empowersleep.com
+The system uses **Retrieval-Augmented Generation (RAG)** to provide responses grounded in trusted sleep resources and EmpowerSleep educational content.
+
+🌐 **Visit:** www.empowersleep.ai
 
 ---
 
-## Architecture
+# Why EmpowerSleep AI?
 
-- **Backend**: FastAPI + RAG pipeline (Python) — deployed on Railway
-- **Frontend**: Next.js App Router — deployed on Railway
-- **Vector store**: FAISS (cosine similarity, `text-embedding-3-small`)
-- **LLM**: GPT-4o-mini via OpenAI
-- **Database**: Supabase (feedback storage)
+Many people struggle with sleep but don’t know where to start. Generic advice often ignores individual patterns, habits, and underlying factors.
 
-```
-User → Next.js frontend → FastAPI backend → FAISS retrieval → GPT-4o-mini → SSE stream → User
-```
+EmpowerSleep AI provides contextual, evidence-based guidance so users can better understand their sleep challenges and take actionable steps toward improvement.
 
-## Project Structure
+Built for people who want to:
 
-```
-EMPOWERSLEEP/
-├── backend/
-│   └── main.py                    # FastAPI app (chat, feedback, health, stats endpoints)
-├── frontend/
-│   ├── app/
-│   │   ├── layout.tsx
-│   │   ├── page.tsx               # Main chat UI
-│   │   └── globals.css
-│   ├── components/
-│   │   ├── ChatMessage.tsx        # Message bubbles with feedback buttons
-│   │   ├── SourceCard.tsx         # Source citations
-│   │   ├── SleepLoader.tsx        # Branded loading animation
-│   │   └── EmpowerLogo.tsx        # SVG logo
-│   └── lib/
-│       ├── api.ts                 # API client (streaming + feedback)
-│       ├── sleepThoughts.ts       # Loading screen messages
-│       └── sampleQuestions.ts     # Welcome screen questions
-├── rag/
-│   ├── chat_engine.py             # Core RAG logic
-│   └── ingestion/
-│       └── textbook_ingestor.py
-├── scripts/
-│   ├── scrape_empowersleep_blog.py
-│   ├── build_blog_index.py
-│   ├── ingest_textbook.py
-│   └── ingest_notion_export.py
-├── data/
-│   ├── blog_docs.jsonl
-│   └── raw/                       # PDFs + Notion export
-├── rag_artifacts/                 # FAISS index (committed)
-└── requirements.txt
-```
+- Understand why they feel tired even after sleeping  
+- Improve **sleep quality**, not just sleep duration  
+- Build healthier nighttime routines  
+- Learn evidence-based sleep science in simple language  
+- Get quick, personalized guidance about sleep habits  
 
-## Local Development
+---
 
-```bash
-# Terminal 1 — backend
-source venv/bin/activate
-python -m uvicorn backend.main:app --reload --port 8000
+# Core Features
 
-# Terminal 2 — frontend
-cd frontend && npm run dev
-```
+## AI Sleep Assistant
+Ask questions about sleep habits, sleep quality, circadian rhythms, or fatigue. The AI provides grounded responses based on trusted sleep resources.
 
-Make sure `frontend/.env.local` has `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000` and `.env` has `APP_ENV=development`.
+## Evidence-Based Responses
+Responses are generated using a **Retrieval-Augmented Generation (RAG)** system that references curated sleep research and EmpowerSleep educational content.
 
-## API Endpoints
+## Smart Follow-Up Suggestions
+The system suggests helpful follow-up questions so users can explore related sleep topics more easily.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/chat` | Non-streaming chat (returns full response) |
-| `POST` | `/chat/stream` | SSE streaming chat (used by frontend) |
-| `POST` | `/feedback` | Submit thumbs up/down feedback |
-| `GET` | `/health` | Health check |
-| `GET` | `/stats` | Knowledge base statistics |
+## Feedback System
+Users can rate responses with **thumbs-up or thumbs-down feedback** to continuously improve AI answer quality.
 
-### SSE streaming format
+## Conversation History
+Sessions can be stored so users can revisit previous sleep questions and responses.
 
-```
-data: {"type": "sources", "sources": [...]}
-data: {"type": "token", "text": "Sleep "}
-data: {"type": "token", "text": "hygiene "}
-data: [DONE]
-```
+---
 
-## Knowledge Base
+# Built With
 
-The RAG index combines three content sources:
+EmpowerSleep AI is built using modern AI and cloud infrastructure.
 
-| Source | Script | Output |
-|--------|--------|--------|
-| EmpowerSleep blog | `scrape_empowersleep_blog.py` + `build_blog_index.py` | `data/blog_docs.jsonl` |
-| PDF textbooks | `ingest_textbook.py` | merged into `rag_artifacts/` |
-| Notion export | `ingest_notion_export.py` | merged into `rag_artifacts/` |
+### Frontend
+- Next.js  
+- React  
+- TypeScript  
+- Tailwind CSS  
 
-### Rebuild index after content changes
+### Backend
+- FastAPI  
+- Python  
 
-```bash
-# Blog
-python scripts/scrape_empowersleep_blog.py
-python scripts/build_blog_index.py
+### AI Infrastructure
+- OpenAI API  
+- Retrieval-Augmented Generation (RAG)  
+- FAISS Vector Search  
 
-# Add a textbook
-python scripts/ingest_textbook.py --pdf data/raw/Book.pdf --book-title "Book Title"
+### Database & Storage
+- Supabase (PostgreSQL)
 
-# Notion (re-export from Notion first, place in data/raw/empower_sleep_notion/)
-python scripts/ingest_notion_export.py --rebuild
-```
+### Deployment
+- Railway (backend hosting)  
+- Vercel / Railway (frontend hosting)
 
-## Deployment (Railway)
+---
 
-Both services are deployed on Railway from this repository. See `CLAUDE.md` for full deployment steps.
+# Architecture Overview
 
-**Backend env vars on Railway:**
-| Variable | Value |
-|----------|-------|
-| `OPENAI_API_KEY` | sk-... |
-| `SUPABASE_URL` | https://xxxx.supabase.co |
-| `SUPABASE_SECRET_KEY` | service role key |
-| `CORS_ORIGINS` | https://frontend-url.up.railway.app |
+The system uses a **Retrieval-Augmented Generation pipeline**:
 
-**Frontend env vars on Railway:**
-| Variable | Value |
-|----------|-------|
-| `NEXT_PUBLIC_API_BASE_URL` | https://backend-url.up.railway.app |
+1. A user asks a sleep-related question  
+2. The system searches a vector database of trusted sleep resources  
+3. Relevant context is retrieved from the knowledge base  
+4. The AI generates a grounded response using the retrieved context  
+5. The response is returned to the user
 
-> `APP_ENV` is intentionally not set on Railway — the backend defaults to `"production"`.
+This architecture helps ensure responses remain **accurate, safe, and evidence-based**.
+
+---
+
+# Safety and Responsible AI
+
+EmpowerSleep AI is designed to provide **educational guidance**, not medical diagnosis.
+
+Safety mechanisms include:
+
+- Guardrails to avoid medical diagnosis or treatment claims  
+- Evidence-based context retrieval  
+- Carefully designed prompts to reduce hallucinations  
+- Continuous monitoring through user feedback  
+
+Users experiencing severe sleep issues are encouraged to consult healthcare professionals.
+
+---
+
+# Feedback
+
+User feedback helps improve the system.
+
+Responses can be rated directly in the interface to help refine the model and improve future answers.
 
 ---
 
