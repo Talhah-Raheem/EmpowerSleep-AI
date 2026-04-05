@@ -1,8 +1,8 @@
 {
-  "build_timestamp": "2026-03-29T05:44:50.069046Z",
+  "build_timestamp": "2026-04-05T05:46:20.437763Z",
   "source_file": "/home/runner/work/EmpowerSleep-AI/EmpowerSleep-AI/data/blog_docs.jsonl",
-  "num_articles": 98,
-  "num_chunks": 160,
+  "num_articles": 99,
+  "num_chunks": 162,
   "embedding_model": "text-embedding-3-small",
   "embedding_dimension": 1536,
   "chunk_target_words": 1000,
