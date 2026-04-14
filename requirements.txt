@@ -24,6 +24,9 @@ beautifulsoup4>=4.12.0    # HTML parsing for blog scraping
 # Database
 supabase>=2.0.0           # Supabase client for feedback storage
 
+# Rate limiting
+slowapi>=0.1.9            # Per-IP rate limiting for FastAPI
+
 # Utilities
 python-dotenv>=1.0.0      # Environment variable management
 numpy                     # Array operations (used by FAISS)

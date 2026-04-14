@@ -17,15 +17,20 @@ Or from project root:
 
 import base64
 import json as json_module
+import logging
 import os
 import sys
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from supabase import create_client, Client
 
 # Add project root to path for imports
@@ -39,6 +44,20 @@ load_dotenv(PROJECT_ROOT / ".env")
 # Import the chat engine
 from rag.chat_engine import ChatEngine
 
+logger = logging.getLogger(__name__)
+
+# =============================================================================
+# ENVIRONMENT
+# =============================================================================
+
+APP_ENV = os.getenv("APP_ENV", "production")
+IS_PRODUCTION = APP_ENV == "production"
+
+# Rate limit strings — relaxed in development so local testing isn't blocked
+CHAT_RATE_LIMIT = "10/minute" if IS_PRODUCTION else "200/minute"
+SUGGESTIONS_RATE_LIMIT = "20/minute" if IS_PRODUCTION else "400/minute"
+FEEDBACK_RATE_LIMIT = "30/minute" if IS_PRODUCTION else "600/minute"
+
 
 # =============================================================================
 # PYDANTIC MODELS
@@ -46,28 +65,25 @@ from rag.chat_engine import ChatEngine
 
 class ChatMessage(BaseModel):
     """Request model for chat endpoint."""
-    message: str = Field(..., min_length=1, max_length=2000, description="User's message")
-    history: Optional[list[dict]] = Field(
-        default=None,
-        description="Conversation history as list of {role, content} dicts"
-    )
+    message: str = Field(..., min_length=1, max_length=2000)
+    history: Optional[list[dict]] = Field(default=None)
 
 
 class Source(BaseModel):
     """Source citation model."""
-    source_type: str = Field(..., description="Type of source: 'textbook', 'blog', or 'web'")
-    title: str = Field(..., description="Title of the source")
-    chapter: Optional[str] = Field(None, description="Chapter name (textbooks only)")
-    page_start: Optional[int] = Field(None, description="Starting page (textbooks only)")
-    page_end: Optional[int] = Field(None, description="Ending page (textbooks only)")
-    url: Optional[str] = Field(None, description="URL (blog/web sources only)")
-    snippet: Optional[str] = Field(None, description="Text preview from source")
+    source_type: str
+    title: str
+    chapter: Optional[str] = None
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
+    url: Optional[str] = None
+    snippet: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
     """Response model for chat endpoint."""
-    answer: str = Field(..., description="Generated answer")
-    sources: list[Source] = Field(default_factory=list, description="Source citations")
+    answer: str
+    sources: list[Source] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):
@@ -101,19 +117,27 @@ app = FastAPI(
     title="EmpowerSleep API",
     description="RAG-powered sleep education chatbot API",
     version="1.0.0",
+    # Disable interactive docs in production — they expose full API structure
+    docs_url=None if IS_PRODUCTION else "/docs",
+    redoc_url=None if IS_PRODUCTION else "/redoc",
+    openapi_url=None if IS_PRODUCTION else "/openapi.json",
 )
 
+# Rate limiter (per-IP)
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # CORS configuration
-# Allow requests from local development and production frontend
-# Additional origins can be added via CORS_ORIGINS env var (comma-separated)
 ALLOWED_ORIGINS = [
-    "http://localhost:3000",      # Next.js dev server
+    "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://empowersleep.com",
     "https://www.empowersleep.com",
+    "https://empowersleep.ai",
+    "https://www.empowersleep.ai",
 ]
 
-# Add origins from environment variable (for Railway deployment)
 extra_origins = os.getenv("CORS_ORIGINS", "")
 if extra_origins:
     ALLOWED_ORIGINS.extend([origin.strip() for origin in extra_origins.split(",")])
@@ -127,10 +151,34 @@ app.add_middleware(
 )
 
 
-# Global chat engine instance (initialized on first request)
-_chat_engine: Optional[ChatEngine] = None
+# =============================================================================
+# EXCEPTION HANDLERS
+# =============================================================================
 
-# Global Supabase client (lazy, initialized on first use)
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Return a generic 422 without leaking Pydantic model structure."""
+    return JSONResponse(status_code=422, content={"detail": "Invalid request"})
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    """Catch-all — log full details server-side, return a safe generic message."""
+    logger.error(
+        "Unhandled exception on %s %s: %s",
+        request.method,
+        request.url.path,
+        exc,
+        exc_info=True,
+    )
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
+# =============================================================================
+# GLOBAL INSTANCES
+# =============================================================================
+
+_chat_engine: Optional[ChatEngine] = None
 _supabase: Optional[Client] = None
 
 
@@ -152,6 +200,15 @@ def get_chat_engine() -> ChatEngine:
     if _chat_engine is None:
         _chat_engine = ChatEngine()
     return _chat_engine
+
+
+def _safe_history(raw: list[dict]) -> list[dict]:
+    """Strip 'system' role messages from client-provided history.
+
+    Clients can inject system-role messages to attempt prompt injection.
+    Only 'user' and 'assistant' turns are legitimate conversation history.
+    """
+    return [m for m in raw if m.get("role") in ("user", "assistant")]
 
 
 # =============================================================================
@@ -209,58 +266,40 @@ async def process_uploaded_files(files: List[UploadFile]) -> list[dict]:
 
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 async def health_check():
-    """
-    Health check endpoint.
-
-    Returns the status of the API and index loading state.
-    """
+    """Health check endpoint."""
     try:
         engine = get_chat_engine()
         stats = engine.get_index_stats()
+        # Avoid leaking internal counts in production
+        if IS_PRODUCTION:
+            return HealthResponse(status="healthy", index_loaded=True)
         return HealthResponse(
             status="healthy",
             index_loaded=True,
             total_chunks=stats["total_chunks"],
             total_vectors=stats["total_vectors"],
         )
-    except FileNotFoundError as e:
-        return HealthResponse(
-            status="degraded",
-            index_loaded=False,
-        )
-    except Exception as e:
-        return HealthResponse(
-            status="unhealthy",
-            index_loaded=False,
-        )
+    except FileNotFoundError:
+        return HealthResponse(status="degraded", index_loaded=False)
+    except Exception:
+        return HealthResponse(status="unhealthy", index_loaded=False)
 
 
 @app.post("/chat", response_model=ChatResponse, tags=["Chat"])
-async def chat(request: ChatMessage):
+@limiter.limit(CHAT_RATE_LIMIT)
+async def chat(request: Request, body: ChatMessage):
     """
-    Send a message and get a response with sources.
-
-    The endpoint:
-    1. Retrieves relevant content from the knowledge base
-    2. Generates a grounded answer using LLM
-    3. Returns the answer with source citations
-
-    For multi-turn conversations, include the conversation history
-    in the request to maintain context.
+    Send a message and get a response with sources (non-streaming).
     """
     try:
         engine = get_chat_engine()
-
-        # Call the RAG pipeline
+        safe_hist = _safe_history(body.history or [])
         answer, sources = engine.ask_question(
-            user_message=request.message,
-            history=request.history
+            user_message=body.message,
+            history=safe_hist,
         )
-
-        # Convert sources to response model
-        source_models = []
-        for src in sources:
-            source_models.append(Source(
+        source_models = [
+            Source(
                 source_type=src.get("source_type", "blog"),
                 title=src.get("title", "Unknown"),
                 chapter=src.get("chapter"),
@@ -268,29 +307,23 @@ async def chat(request: ChatMessage):
                 page_end=src.get("page_end"),
                 url=src.get("url"),
                 snippet=src.get("snippet"),
-            ))
-
+            )
+            for src in sources
+        ]
         return ChatResponse(answer=answer, sources=source_models)
-
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         raise HTTPException(
             status_code=503,
-            detail="Knowledge base not loaded. Please run indexing scripts first."
+            detail="Knowledge base not loaded. Please run indexing scripts first.",
         )
     except ValueError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal error: {str(e)}"
-        )
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/chat/stream", tags=["Chat"])
+@limiter.limit(CHAT_RATE_LIMIT)
 async def chat_stream(
+    request: Request,
     message: str = Form(...),
     history: str = Form("[]"),
     files: Optional[List[UploadFile]] = File(None),
@@ -308,11 +341,13 @@ async def chat_stream(
     """
     engine = get_chat_engine()
 
-    # Parse history from JSON string
+    # Parse and sanitize history
     try:
         history_list: list[dict] = json_module.loads(history)
     except Exception:
         history_list = []
+
+    safe_hist = _safe_history(history_list)
 
     # Process any uploaded files
     file_context: Optional[list[dict]] = None
@@ -325,7 +360,7 @@ async def chat_stream(
         try:
             async for event_type, data in engine.stream_question(
                 user_message=message,
-                history=history_list,
+                history=safe_hist,
                 file_context=file_context,
             ):
                 if event_type == "sources":
@@ -337,7 +372,8 @@ async def chat_stream(
                 elif event_type == "done":
                     yield "data: [DONE]\n\n"
         except Exception as e:
-            payload = json_module.dumps({"type": "error", "message": str(e)})
+            logger.error("Stream error: %s", e, exc_info=True)
+            payload = json_module.dumps({"type": "error", "message": "An error occurred. Please try again."})
             yield f"data: {payload}\n\n"
 
     return StreamingResponse(
@@ -351,40 +387,40 @@ async def chat_stream(
 
 
 @app.post("/feedback", tags=["Feedback"])
-async def submit_feedback(request: FeedbackRequest):
+@limiter.limit(FEEDBACK_RATE_LIMIT)
+async def submit_feedback(request: Request, body: FeedbackRequest):
     """
     Submit feedback (thumbs up/down) for an AI response.
-
-    Stores the session ID, user question, AI response, and rating in Supabase.
     Rating: 1 = thumbs up, -1 = thumbs down.
     """
     try:
         db = get_supabase()
         db.table("feedback").insert({
-            "session_id": request.session_id,
-            "user_question": request.user_question,
-            "ai_response": request.ai_response,
-            "rating": request.rating,
+            "session_id": body.session_id,
+            "user_question": body.user_question,
+            "ai_response": body.ai_response,
+            "rating": body.rating,
             "environment": os.environ.get("APP_ENV", "production"),
         }).execute()
         return {"status": "ok"}
-    except ValueError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save feedback: {str(e)}")
+    except ValueError:
+        raise HTTPException(status_code=503, detail="Feedback service unavailable.")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to save feedback.")
 
 
 @app.post("/suggestions", tags=["Chat"])
-async def get_suggestions(request: SuggestionsRequest):
+@limiter.limit(SUGGESTIONS_RATE_LIMIT)
+async def get_suggestions(request: Request, body: SuggestionsRequest):
     """
     Generate 3 follow-up question suggestions based on the conversation.
     """
     try:
         engine = get_chat_engine()
-        client = engine._async_client
+        client = engine.async_client  # use the property so it initialises if needed
 
         history_text = ""
-        for turn in request.history[-4:]:
+        for turn in body.history[-4:]:
             role = turn.get("role", "")
             content = turn.get("content", "")
             history_text += f"{role.capitalize()}: {content}\n\n"
@@ -393,8 +429,8 @@ async def get_suggestions(request: SuggestionsRequest):
             "Based on this sleep-related conversation, suggest exactly 3 short follow-up questions "
             "the user might want to ask next. Questions should dig deeper into what was just discussed.\n\n"
             f"{history_text}"
-            f"User: {request.message}\n"
-            f"Assistant: {request.response}\n\n"
+            f"User: {body.message}\n"
+            f"Assistant: {body.response}\n\n"
             "Return exactly 3 questions, one per line, no numbering, no bullet points. "
             "Keep each question under 12 words."
         )
@@ -415,20 +451,23 @@ async def get_suggestions(request: SuggestionsRequest):
 
 
 @app.get("/stats", tags=["System"])
-async def get_stats():
+async def get_stats(
+    request: Request,
+    x_admin_key: Optional[str] = Header(default=None),
+):
     """
     Get statistics about the knowledge base.
-
-    Returns counts of chunks, vectors, and breakdown by source type.
+    Requires X-Admin-Key header in production.
     """
+    if IS_PRODUCTION:
+        admin_key = os.environ.get("ADMIN_STATS_KEY")
+        if not admin_key or x_admin_key != admin_key:
+            raise HTTPException(status_code=404, detail="Not found")
     try:
         engine = get_chat_engine()
         return engine.get_index_stats()
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
