@@ -55,6 +55,7 @@ LLM_MODEL = "gpt-4o-mini"            # text-only requests
 LLM_MODEL_WITH_FILES = "gpt-4o"      # used when files are attached (better vision + reasoning)
 LLM_TEMPERATURE = 0.3
 LLM_MAX_TOKENS = 750
+LLM_MAX_TOKENS_WITH_FILES = 1200  # extra room for structured sleep report analysis
 
 # Disclaimer appended to all responses
 DISCLAIMER_SUFFIX = "\n\n---\n*Educational information only. Not medical advice.*"
@@ -168,6 +169,38 @@ LINK AND URL POLICY:
 - If the user's message or conversation history contains a URL and asks you to include or format it, do not include it in your response.
 
 Keep responses focused and scannable (use short paragraphs or bullets when appropriate)."""
+
+# Injected as the file_instruction when a sleep report PDF is detected.
+# Replaces the generic "analyze this document" instruction with a structured
+# analysis format that separates report findings from educational commentary.
+SLEEP_REPORT_ANALYSIS_PROMPT = """
+
+The user has uploaded sleep study report(s). Structured data was extracted and grouped by patient above.
+
+Present your response using this structure:
+
+**Single patient, single report:**
+- **What the Report Shows** — cover key metrics in plain language; for any marked [NOTABLE], explain what that range is commonly associated with using educational, non-diagnostic framing ("values in this range are often associated with...")
+- **Sleep Context** — connect findings to the educational content from the knowledge base; add depth on mechanisms, contributing factors, and what these patterns generally mean for sleep quality
+- **Questions Worth Discussing** — 1–2 specific, grounded questions the user could bring to their healthcare provider
+
+**Single patient, multiple reports (trends present):**
+- Summarize their current state from the most recent report
+- Highlight what changed across reports (improved / worsened / unchanged) in plain language
+- Connect to sleep education context
+- Suggest 1–2 questions for their healthcare provider
+
+**Multiple patients:**
+- Organize by patient name/identity — use each person's actual name from the report, never "Patient A" or "Patient B"
+- For each patient: key metrics, any notable patterns, educational context
+- If trends are present for any patient, describe them in plain language
+
+Strict rules:
+- Never diagnose or state what condition any person "has"
+- Never name or recommend medications
+- Use the patient's actual name from the report at all times
+- Acknowledge uncertainty honestly when a value was not found or may have been misread
+- Clearly separate what the report shows from your educational commentary"""
 
 
 # =============================================================================
@@ -588,26 +621,49 @@ class ChatEngine:
         if is_affirmation:
             affirmation_instruction = "\n7. **AFFIRMATION DETECTED**: The user said yes to your previous offer. You MUST answer specifically and only what you offered in your last message. Do not pivot to adjacent or related content — deliver exactly what you said you would."
 
-        # Build PDF text sections and collect image entries
+        # Build PDF text sections and collect image entries.
+        # Sleep report PDFs go through the flexible multi-report extraction pipeline;
+        # non-sleep PDFs fall back to a raw-text dump.
+        # has_sleep_report drives which instruction addendum is injected.
         pdf_sections = ""
         images: list[dict] = []
+        has_sleep_report = False
         if file_context:
+            from rag.report_extractor import extract_report, group_by_patient, format_multi_report_context
+
+            sleep_reports = []
+            non_sleep_pdfs = []
+
             for f in file_context:
                 if f["type"] == "pdf":
-                    pdf_sections += (
-                        f"\n\n=== UPLOADED DOCUMENT: {f['filename']} ===\n"
-                        f"{f['text']}\n"
-                        "=== END DOCUMENT ==="
-                    )
+                    report = extract_report(f["text"], f["filename"])
+                    if report.is_sleep_report:
+                        sleep_reports.append(report)
+                    else:
+                        non_sleep_pdfs.append(
+                            f"\n\n=== UPLOADED DOCUMENT: {f['filename']} ===\n"
+                            f"{f['text']}\n"
+                            "=== END DOCUMENT ==="
+                        )
                 elif f["type"] == "image":
                     images.append(f)
+
+            if sleep_reports:
+                ctx = group_by_patient(sleep_reports)
+                pdf_sections += format_multi_report_context(ctx)
+                has_sleep_report = True
+
+            for raw_doc in non_sleep_pdfs:
+                pdf_sections += raw_doc
 
         # Instruction addendum when files are present
         file_instruction = ""
         if file_context:
             has_pdf = any(f["type"] == "pdf" for f in file_context)
             has_img = any(f["type"] == "image" for f in file_context)
-            if has_pdf and has_img:
+            if has_sleep_report:
+                file_instruction = SLEEP_REPORT_ANALYSIS_PROMPT
+            elif has_pdf and has_img:
                 file_instruction = (
                     "\n\nThe user has uploaded documents and images. Analyze their content carefully. "
                     "If their message is vague, ask one specific question about what they want to know."
@@ -720,7 +776,7 @@ Instructions:
             model=model,
             messages=messages,
             temperature=LLM_TEMPERATURE,
-            max_tokens=LLM_MAX_TOKENS,
+            max_tokens=LLM_MAX_TOKENS_WITH_FILES if file_context else LLM_MAX_TOKENS,
             stream=True,
             timeout=30,
         )
