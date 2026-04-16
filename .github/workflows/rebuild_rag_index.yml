@@ -120,7 +120,22 @@ jobs:
           fi
 
       # --------------------------------------------------
-      # 8. Commit and push updated artifacts
+      # 8. Re-ingest Notion content so it stays in the merged index
+      #    build_blog_index.py overwrites rag_artifacts/ from scratch,
+      #    so Notion must be re-added after each blog rebuild.
+      # --------------------------------------------------
+      - name: Re-ingest Notion content
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -d "data/raw/empower_sleep_notion" ]; then
+            python scripts/ingest_notion_export.py --rebuild
+          else
+            echo "No Notion export found, skipping Notion ingestion"
+          fi
+
+      # --------------------------------------------------
+      # 9. Commit and push updated artifacts
       #    - Only commits if files actually changed (git diff)
       #    - [skip ci] prevents this push from re-triggering workflows
       #    - Uses GITHUB_TOKEN so the push does NOT trigger other workflows
