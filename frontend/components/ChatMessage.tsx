@@ -4,6 +4,7 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Message } from '@/lib/api';
 import { SourceList } from './SourceCard';
+import { SleepDashboard } from './SleepDashboard';
 import { trackEvent } from '@/lib/analytics';
 
 interface ChatMessageProps {
@@ -138,6 +139,11 @@ export function ChatMessage({ message, streaming, onRegenerate, onFeedback }: Ch
           <span className="inline-block w-[2px] h-[1em] bg-empower-500 dark:bg-empower-300 ml-0.5 align-middle animate-blink" />
         )}
       </div>
+
+      {/* Sleep Report Dashboard */}
+      {message.metrics && (
+        <SleepDashboard metrics={message.metrics} />
+      )}
 
       {/* Sources */}
       {message.sources && message.sources.length > 0 && (

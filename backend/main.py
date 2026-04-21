@@ -366,6 +366,9 @@ async def chat_stream(
                 if event_type == "sources":
                     payload = json_module.dumps({"type": "sources", "sources": data})
                     yield f"data: {payload}\n\n"
+                elif event_type == "metrics":
+                    payload = json_module.dumps({"type": "metrics", "data": data})
+                    yield f"data: {payload}\n\n"
                 elif event_type == "token":
                     payload = json_module.dumps({"type": "token", "text": data})
                     yield f"data: {payload}\n\n"

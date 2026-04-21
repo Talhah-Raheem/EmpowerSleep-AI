@@ -765,6 +765,30 @@ Instructions:
         sources = _format_sources(chunks)[:3]
         yield ("sources", sources)
 
+        # Step 2b: If sleep report PDFs are attached, yield a metrics event for the dashboard.
+        # Extraction is deterministic (regex only) — no extra LLM call.
+        # Wrapped in try/except so a parsing failure never blocks the main stream.
+        if file_context:
+            try:
+                from rag.report_extractor import (
+                    extract_report, group_by_patient,
+                    has_dashboard_data, to_dashboard_dict,
+                    enrich_with_llm_fallback,
+                )
+                pdf_files = [f for f in file_context if f["type"] == "pdf"]
+                sleep_reports = [extract_report(f["text"], f["filename"]) for f in pdf_files]
+                # LLM fallback for any sleep report where regex found < 2 metrics
+                for report, f in zip(sleep_reports, pdf_files):
+                    if report.is_sleep_report:
+                        await enrich_with_llm_fallback(report, f["text"], self.async_client)
+                detected = [r for r in sleep_reports if r.is_sleep_report]
+                if detected:
+                    ctx = group_by_patient(detected)
+                    if has_dashboard_data(ctx):
+                        yield ("metrics", to_dashboard_dict(ctx))
+            except Exception:
+                pass  # dashboard is non-critical — never block the response
+
         # Step 3: Build prompt and stream from OpenAI
         context = self._format_context(chunks)
         messages = self._build_llm_messages(user_message, context, history, file_context)

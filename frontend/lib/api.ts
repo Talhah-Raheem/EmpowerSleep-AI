@@ -30,6 +30,43 @@ export interface ChatResponse {
 }
 
 /**
+ * A single extracted metric value from a sleep report
+ */
+export interface SleepMetricValue {
+  value: number;
+  unit: string;
+  flagged: boolean;
+  flag_note?: string;
+}
+
+/**
+ * Metrics from one sleep report
+ */
+export interface SleepReportData {
+  filename: string;
+  date?: string;
+  report_type: string;
+  metrics: Record<string, SleepMetricValue>;
+}
+
+/**
+ * All reports for one patient
+ */
+export interface SleepPatient {
+  name: string;
+  reports: SleepReportData[];
+}
+
+/**
+ * Top-level dashboard payload from the metrics SSE event
+ */
+export interface SleepMetrics {
+  total_reports: number;
+  total_patients: number;
+  patients: SleepPatient[];
+}
+
+/**
  * File attachment on a user message
  */
 export interface MessageAttachment {
@@ -46,6 +83,7 @@ export interface Message {
   content: string;
   sources?: Source[];
   attachments?: MessageAttachment[];
+  metrics?: SleepMetrics;
 }
 
 /**
@@ -90,6 +128,7 @@ export async function sendMessage(
 export interface StreamCallbacks {
   onToken: (text: string) => void;
   onSources: (sources: Source[]) => void;
+  onMetrics: (metrics: SleepMetrics) => void;
   onDone: () => void;
   onError: (err: Error) => void;
 }
@@ -163,6 +202,8 @@ export async function streamMessage(
             callbacks?.onToken(event.text);
           } else if (event.type === 'sources') {
             callbacks?.onSources(event.sources);
+          } else if (event.type === 'metrics') {
+            callbacks?.onMetrics(event.data);
           } else if (event.type === 'error') {
             callbacks?.onError(new Error(event.message));
             return;

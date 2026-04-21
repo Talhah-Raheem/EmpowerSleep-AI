@@ -132,11 +132,13 @@ METRIC_ALIASES: dict[str, str] = {
     # ── Sleep continuity ─────────────────────────────────────────────────────
     "sleep efficiency": "sleep_efficiency",
     "sleep efficiency %": "sleep_efficiency",
+    "sleep efficiency (%)": "sleep_efficiency",
     "se": "sleep_efficiency",
 
     "total sleep time": "total_sleep_time",
     "tst": "total_sleep_time",
     "total sleep time (min)": "total_sleep_time",
+    "total sleep time, tst": "total_sleep_time",
 
     "sleep onset latency": "sleep_onset_latency",
     "sol": "sleep_onset_latency",
@@ -153,6 +155,7 @@ METRIC_ALIASES: dict[str, str] = {
     "trt": "total_recording_time",
     "time in bed": "time_in_bed",
     "tib": "time_in_bed",
+    "time in bed, tib": "time_in_bed",
 
     # ── Sleep stages — percentage ─────────────────────────────────────────────
     "n1": "n1_pct",
@@ -213,10 +216,18 @@ METRIC_ALIASES: dict[str, str] = {
     "ahi (overall)": "ahi",
     "ahi (total)": "ahi",
     "ahi overall": "ahi",
+    "ahi-total": "ahi",
+    "ahi 3%": "ahi",
+    "ahi 4%": "ahi",
+    "apnea-hypopnea index 3%": "ahi",
+    "apnea-hypopnea index 4%": "ahi",
+    "apnea hypopnea index 3%": "ahi",
+    "apnea hypopnea index 4%": "ahi",
 
     "rdi": "rdi",
     "respiratory disturbance index": "rdi",
     "total rdi": "rdi",
+    "srdi": "rdi",
 
     "rera index": "rera_index",
     "rera": "rera_index",
@@ -225,10 +236,14 @@ METRIC_ALIASES: dict[str, str] = {
     "obstructive ahi": "obstructive_ahi",
     "obstructive apnea index": "obstructive_ahi",
     "oai": "obstructive_ahi",
+    "sahi-obstructive": "obstructive_ahi",
+    "sahi obstructive": "obstructive_ahi",
 
     "central ahi": "central_ahi",
     "central apnea index": "central_ahi",
     "cai": "central_ahi",
+    "sahi-central": "central_ahi",
+    "sahi central": "central_ahi",
 
     "mixed ahi": "mixed_ahi",
     "mixed apnea index": "mixed_ahi",
@@ -253,12 +268,18 @@ METRIC_ALIASES: dict[str, str] = {
     "oxygen desaturation nadir": "spo2_min",
     "min spo2": "spo2_min",
     "spo2 min": "spo2_min",
+    "spo2 min (%)": "spo2_min",
 
     "spo2 average": "spo2_avg",
     "average spo2": "spo2_avg",
     "mean spo2": "spo2_avg",
     "spo2 mean": "spo2_avg",
     "spo2 avg": "spo2_avg",
+    "spo2 mean (%)": "spo2_avg",
+    "spo2 max (%)": "spo2_max",
+    "spo2 maximum": "spo2_max",
+    "maximum spo2": "spo2_max",
+    "highest spo2": "spo2_max",
 
     "time below 90": "spo2_below90_pct",
     "time below 90%": "spo2_below90_pct",
@@ -361,11 +382,18 @@ def _flag(key: str, value: float) -> tuple[bool, str]:
 # LAYER 1: BROAD EXTRACTION
 # =============================================================================
 
-# Matches any "Label: Value" or "Label = Value" line.
-# Label: starts with a letter, 2–60 chars, can contain spaces/hyphens/slashes/parens.
+# Matches "Label: Value" or "Label = Value" on the same line.
+# Label: starts with a letter, up to 80 chars, can include spaces/hyphens/slashes/parens/commas.
 # Value: rest of line, up to 140 chars.
 _LABEL_VALUE_RE = re.compile(
-    r"^[ \t]*([A-Za-z][A-Za-z0-9 \-/\(\)\%]{1,59}?)[ \t]*[:=][ \t]*([^\n]{1,140}?)[ \t]*$",
+    r"^[ \t]*([A-Za-z][A-Za-z0-9 \-/\(\)\%,]{1,79}?)[ \t]*[:=][ \t]*([^\n]{1,140}?)[ \t]*$",
+    re.MULTILINE,
+)
+
+# Matches "Label:\n<numeric value>" — label alone on a line, value on the next line.
+# Value must start with a digit to avoid accidentally matching section headers as values.
+_LABEL_VALUE_MULTILINE_RE = re.compile(
+    r"^[ \t]*([A-Za-z][A-Za-z0-9 \-/\(\)\%,]{1,79}?)[ \t]*:[ \t]*\n[ \t]*(\d[^\n]*?)[ \t]*$",
     re.MULTILINE,
 )
 
@@ -429,19 +457,33 @@ def _extract_all_label_values(text: str) -> dict[str, str]:
     Broadly extract all "Label: Value" pairs in the text.
     Returns raw strings — normalization happens in the next layer.
     Deduplicates by keeping the first occurrence of each label.
+
+    Two passes:
+      1. Same-line  — "Label: Value"
+      2. Multi-line — "Label:\\nValue" (value on the next line, must start with a digit)
     """
     found: dict[str, str] = {}
+
+    # Pass 1: same-line format
     for m in _LABEL_VALUE_RE.finditer(text):
         label = re.sub(r"\s+", " ", m.group(1).strip())
         value = m.group(2).strip()
-
-        # Skip empty values, values that are just another colon-header, or pure punctuation
-        if not value or value.endswith(":") or len(value) < 1:
+        if not value or value.endswith(":"):
             continue
-
         key = label.lower()
-        if key not in found:           # keep first occurrence
+        if key not in found:
             found[key] = value
+
+    # Pass 2: multi-line format (label on one line, numeric value on the next)
+    for m in _LABEL_VALUE_MULTILINE_RE.finditer(text):
+        label = re.sub(r"\s+", " ", m.group(1).strip())
+        value = m.group(2).strip()
+        if not value:
+            continue
+        key = label.lower()
+        if key not in found:           # same-line takes precedence
+            found[key] = value
+
     return found
 
 
@@ -524,7 +566,18 @@ def _parse_value(raw: str, canonical_key: str = "") -> tuple[Optional[float], st
                                 "central_ahi", "rera_index", "plm_index", "odi"}:
             unit = "/hr"
 
-    return value, unit.strip()
+    unit = unit.strip()
+
+    # Convert hours → minutes for time fields (e.g. "7h", "6 hrs", "7.5 hours")
+    if canonical_key in _MIN_KEYS and re.match(r"^h(?:r(?:s|ours?)?)?$", unit, re.IGNORECASE):
+        value = value * 60
+        unit = "min"
+
+    # Normalize unit variants: "events/hr", "event/hr" → "/hr"
+    if re.search(r"events?/h", unit, re.IGNORECASE):
+        unit = "/hr"
+
+    return value, unit
 
 
 def _normalize_label(label: str) -> Optional[str]:
@@ -906,3 +959,234 @@ def format_multi_report_context(ctx: MultiReportContext) -> str:
 
     lines.append("\n=== END SLEEP REPORTS ===")
     return "\n".join(lines)
+
+
+# =============================================================================
+# LLM FALLBACK + AUTO-LEARNING
+# =============================================================================
+
+from pathlib import Path as _Path
+import json as _json
+
+_LEARNED_ALIASES_PATH = _Path(__file__).parent.parent / "rag_artifacts" / "learned_aliases.json"
+
+
+def _load_learned_aliases() -> None:
+    """Load persisted learned aliases and merge into METRIC_ALIASES on import."""
+    try:
+        if _LEARNED_ALIASES_PATH.exists():
+            with open(_LEARNED_ALIASES_PATH) as f:
+                for label, canonical in _json.load(f).items():
+                    if label not in METRIC_ALIASES:
+                        METRIC_ALIASES[label] = canonical
+    except Exception:
+        pass
+
+
+_load_learned_aliases()
+
+
+def _reverse_map_label(text: str, value: float) -> Optional[str]:
+    """
+    Find the unique label that precedes `value` in the text.
+    Returns the normalized label string, or None if ambiguous or not found.
+    Only persists mappings that appear exactly once — avoids false associations.
+    """
+    val_strs = {str(value)}
+    if value == int(value):
+        val_strs.add(str(int(value)))
+    val_strs.add(f"{value:.1f}")
+
+    found: list[str] = []
+    for val_str in val_strs:
+        esc = re.escape(val_str)
+        # Same-line: "Label: 92"
+        for m in re.finditer(
+            rf"([A-Za-z][A-Za-z0-9 \-/\(\)\%,]{{2,79}}?)\s*[:=]\s*{esc}\b",
+            text, re.MULTILINE,
+        ):
+            label = re.sub(r"\s+", " ", m.group(1).strip()).lower()
+            if label not in found:
+                found.append(label)
+        # Next-line: "Label:\n92"
+        for m in re.finditer(
+            rf"([A-Za-z][A-Za-z0-9 \-/\(\)\%,]{{2,79}}?)\s*:\s*\n\s*{esc}\b",
+            text, re.MULTILINE,
+        ):
+            label = re.sub(r"\s+", " ", m.group(1).strip()).lower()
+            if label not in found:
+                found.append(label)
+
+    return found[0] if len(found) == 1 else None
+
+
+def _persist_learned_alias(label: str, canonical_key: str) -> None:
+    """Save a new label→canonical_key mapping to disk and update in-memory METRIC_ALIASES."""
+    try:
+        existing: dict = {}
+        if _LEARNED_ALIASES_PATH.exists():
+            with open(_LEARNED_ALIASES_PATH) as f:
+                existing = _json.load(f)
+        if label not in existing and label not in METRIC_ALIASES:
+            existing[label] = canonical_key
+            _LEARNED_ALIASES_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(_LEARNED_ALIASES_PATH, "w") as f:
+                _json.dump(existing, f, indent=2, sort_keys=True)
+            METRIC_ALIASES[label] = canonical_key
+    except Exception:
+        pass  # persistence is best-effort
+
+
+_LLM_EXTRACTION_PROMPT = """\
+Extract sleep study metrics from the report text below.
+Return ONLY a valid JSON object. Include only metrics you can clearly identify — never guess.
+Values must be plain numbers only (no units, no text).
+
+Use exactly these key names (omit any you cannot find):
+  ahi, rdi, obstructive_ahi, central_ahi, odi, arousal_index,
+  sleep_efficiency, spo2_min, spo2_avg, spo2_below90_pct,
+  total_sleep_time, time_in_bed, waso, sleep_onset_latency, rem_latency,
+  n1_pct, n2_pct, n3_pct, rem_pct, plm_index, hypoxic_burden
+
+Rules:
+- sleep_efficiency and *_pct keys: 0–100 scale (e.g. 82, not 0.82)
+- total_sleep_time, time_in_bed, waso, sleep_onset_latency, rem_latency: minutes
+- All other keys: events/hr or native unit as it appears in the report
+
+Report text:
+"""
+
+
+async def enrich_with_llm_fallback(
+    report: "NormalizedReport",
+    text: str,
+    async_client,
+) -> None:
+    """
+    If the report has fewer than 2 numeric metrics, call gpt-4o-mini to extract
+    metrics from the PDF text and merge them into report.metrics.
+    Auto-learns new label→canonical_key mappings from successful extractions.
+    Mutates report in place. Never raises.
+    """
+    ahi_found = "ahi" in report.metrics and report.metrics["ahi"].numeric is not None
+    total_metrics = sum(1 for v in report.metrics.values() if v.numeric is not None)
+    if ahi_found and total_metrics >= 4:
+        return
+
+    try:
+        response = await async_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": _LLM_EXTRACTION_PROMPT + text[:6000]}],
+            response_format={"type": "json_object"},
+            temperature=0,
+            max_tokens=300,
+            timeout=15,
+        )
+        extracted: dict = _json.loads(response.choices[0].message.content)
+
+        for canonical_key, raw_val in extracted.items():
+            if canonical_key in report.metrics:
+                continue  # don't overwrite regex result
+            try:
+                numeric = float(raw_val)
+            except (TypeError, ValueError):
+                continue
+
+            # LLM sometimes returns hours for TST/TIB despite instructions — convert to minutes.
+            # Only for fields that are always hours-scale (TST/TIB), not waso/latency (legitimately < 24 min).
+            if canonical_key in {"total_sleep_time", "time_in_bed"} and numeric < 24:
+                numeric = numeric * 60
+
+            # Infer unit from canonical key
+            if canonical_key in _PCT_KEYS:
+                unit = "%"
+            elif canonical_key in _MIN_KEYS:
+                unit = "min"
+            elif canonical_key in {"ahi", "rdi", "arousal_index", "obstructive_ahi",
+                                    "central_ahi", "rera_index", "plm_index", "odi"}:
+                unit = "/hr"
+            else:
+                unit = ""
+
+            flagged, flag_note = _flag(canonical_key, numeric)
+            report.metrics[canonical_key] = ExtractedValue(
+                numeric=numeric, unit=unit, raw=str(raw_val),
+                flagged=flagged, flag_note=flag_note,
+            )
+
+            # Auto-learn: find the label that maps to this canonical key in the text
+            label = _reverse_map_label(text, numeric)
+            if label and label not in METRIC_ALIASES:
+                _persist_learned_alias(label, canonical_key)
+
+    except Exception:
+        pass  # LLM fallback is non-critical — never block the main stream
+
+
+# =============================================================================
+# DASHBOARD SERIALIZATION
+# =============================================================================
+
+def has_dashboard_data(ctx: "MultiReportContext") -> bool:
+    """Return True if ctx contains ≥2 numeric metric values across all reports."""
+    count = 0
+    all_reports = [r for pg in ctx.patient_groups for r in pg.reports] + list(ctx.unmatched_reports)
+    for r in all_reports:
+        count += sum(1 for v in r.metrics.values() if v.numeric is not None)
+        if count >= 2:
+            return True
+    return False
+
+
+def to_dashboard_dict(ctx: "MultiReportContext") -> dict:
+    """Serialize MultiReportContext to a JSON-safe dict for the SSE metrics event."""
+    patients = []
+    for pg in ctx.patient_groups:
+        reports = []
+        for r in pg.reports:
+            numeric_metrics = {
+                k: {
+                    "value": v.numeric,
+                    "unit": v.unit,
+                    "flagged": v.flagged,
+                    "flag_note": v.flag_note,
+                }
+                for k, v in r.metrics.items()
+                if v.numeric is not None
+            }
+            reports.append({
+                "filename": r.filename,
+                "date": r.study_date,
+                "report_type": r.report_type,
+                "metrics": numeric_metrics,
+            })
+        patients.append({
+            "name": pg.patient_name or pg.patient_key,
+            "reports": reports,
+        })
+    # Also include unmatched reports
+    for r in ctx.unmatched_reports:
+        numeric_metrics = {
+            k: {
+                "value": v.numeric,
+                "unit": v.unit,
+                "flagged": v.flagged,
+                "flag_note": v.flag_note,
+            }
+            for k, v in r.metrics.items()
+            if v.numeric is not None
+        }
+        patients.append({
+            "name": r.patient_name or r.filename,
+            "reports": [{
+                "filename": r.filename,
+                "date": r.study_date,
+                "report_type": r.report_type,
+                "metrics": numeric_metrics,
+            }],
+        })
+    return {
+        "total_reports": ctx.total_reports,
+        "total_patients": ctx.total_patients,
+        "patients": patients,
+    }
