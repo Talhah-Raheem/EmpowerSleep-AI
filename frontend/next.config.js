@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const isDev = process.env.NODE_ENV === 'development';
+
 const nextConfig = {
   reactStrictMode: true,
 
@@ -28,6 +30,7 @@ const nextConfig = {
           // Content Security Policy
           // Notes:
           //   script-src 'unsafe-inline' — required by Next.js App Router hydration
+          //   script-src 'unsafe-eval'   — required by webpack dev server (eval source maps); dev only
           //   style-src  'unsafe-inline' — required by Tailwind CSS inline styles
           //   img-src    blob: data:     — required for file upload previews & lightbox
           //   font-src   fonts.gstatic   — Google Fonts file delivery
@@ -36,7 +39,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'",
+              isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob:",

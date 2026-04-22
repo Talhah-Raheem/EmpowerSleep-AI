@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, FormEvent } from 'react';
 import { useTheme } from 'next-themes';
-import { Message, MessageAttachment, Source, streamMessage, submitFeedback, getSuggestions } from '@/lib/api';
+import { Message, MessageAttachment, Source, SleepMetrics, streamMessage, submitFeedback, getSuggestions } from '@/lib/api';
 import { getRandomQuestions } from '@/lib/sampleQuestions'
 import { trackEvent } from '@/lib/analytics';
 import { ChatMessage } from '@/components/ChatMessage';
@@ -50,6 +50,7 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const pendingSourcesRef = useRef<Source[]>([]);
+  const pendingMetricsRef = useRef<SleepMetrics | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
   const sessionIdRef = useRef<string>(crypto.randomUUID());
@@ -130,6 +131,7 @@ export default function ChatPage() {
    */
   const runStream = async (userMessageText: string, historySnapshot: Message[], files?: File[]) => {
     pendingSourcesRef.current = [];
+    pendingMetricsRef.current = null;
     userScrolledUpRef.current = false;
     assistantAddedRef.current = false;
     suggestionsAbortRef.current?.abort();
@@ -145,6 +147,9 @@ export default function ChatPage() {
         {
           onSources: (sources) => {
             pendingSourcesRef.current = sources;
+          },
+          onMetrics: (metrics) => {
+            pendingMetricsRef.current = metrics;
           },
           onToken: (text) => {
             if (firstToken) {
@@ -170,7 +175,11 @@ export default function ChatPage() {
             setMessages((prev) => {
               const updated = [...prev];
               const last = updated[updated.length - 1];
-              updated[updated.length - 1] = { ...last, sources: pendingSourcesRef.current };
+              updated[updated.length - 1] = {
+                ...last,
+                sources: pendingSourcesRef.current,
+                ...(pendingMetricsRef.current && { metrics: pendingMetricsRef.current }),
+              };
               return updated;
             });
             // Fetch follow-up suggestions, cancellable if user starts a new chat
