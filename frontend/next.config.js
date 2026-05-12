@@ -43,6 +43,8 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob:",
+              "frame-src blob:",
+              "object-src blob:",
               "connect-src 'self' http://localhost:8000 https://api.empowersleep.ai https://us.i.posthog.com https://app.posthog.com",
               "frame-ancestors 'none'",
             ].join('; '),
