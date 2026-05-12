@@ -21,6 +21,12 @@ import { StarField } from '@/components/StarField';
  * - Source citations
  * - Dark mode toggle
  */
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function ChatPage() {
   // State
   const [messages, setMessages] = useState<Message[]>([]);
@@ -34,7 +40,8 @@ export default function ChatPage() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
-  const [filePreviewUrls, setFilePreviewUrls] = useState<(string | null)[]>([]);
+  const [filePreviewUrls, setFilePreviewUrls] = useState<string[]>([]);
+  const [previewFile, setPreviewFile] = useState<{ url: string; name: string; isPdf: boolean } | null>(null);
 
   const { theme, setTheme } = useTheme();
 
@@ -93,10 +100,10 @@ export default function ChatPage() {
     if (!selected.length) return;
     const remaining = Math.max(0, 5 - attachedFiles.length);
     const toAdd = selected.slice(0, remaining);
-    const newUrls = toAdd.map((f) => (f.type.startsWith('image/') ? URL.createObjectURL(f) : null));
+    const newUrls = toAdd.map((f) => URL.createObjectURL(f));
     setAttachedFiles((prev) => [...prev, ...toAdd]);
     setFilePreviewUrls((prev) => [...prev, ...newUrls]);
-    e.target.value = ''; // reset so same file can be re-selected
+    e.target.value = '';
   };
 
   const removeFile = (index: number) => {
@@ -241,6 +248,7 @@ export default function ChatPage() {
           type: (f.type.startsWith('image/') ? 'image' : 'pdf') as 'image' | 'pdf',
           name: f.name,
           url: urlsSnapshot[i] ?? undefined,
+          size: f.size,
         }))
       : undefined;
 
@@ -348,36 +356,88 @@ export default function ChatPage() {
     </button>
   );
 
+  const filePreviewModal = previewFile && (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={() => setPreviewFile(null)}
+    >
+      <div
+        className="relative bg-white dark:bg-empower-900 rounded-2xl shadow-2xl overflow-hidden w-full max-w-4xl flex flex-col"
+        style={{ maxHeight: '90vh' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-empower-100 dark:border-empower-700 flex-shrink-0">
+          <p className="text-sm font-medium text-empower-700 dark:text-empower-200 truncate pr-4">{previewFile.name}</p>
+          <button
+            onClick={() => setPreviewFile(null)}
+            aria-label="Close preview"
+            className="p-1.5 rounded-lg text-empower-400 hover:text-empower-600 dark:hover:text-empower-200 hover:bg-empower-100 dark:hover:bg-empower-700 transition-colors flex-shrink-0"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        {previewFile.isPdf ? (
+          <embed
+            src={previewFile.url}
+            type="application/pdf"
+            className="w-full flex-1"
+            style={{ minHeight: '75vh' }}
+          />
+        ) : (
+          <div className="flex items-center justify-center p-4 overflow-auto" style={{ maxHeight: '80vh' }}>
+            <img
+              src={previewFile.url}
+              alt={previewFile.name}
+              className="max-w-full max-h-full object-contain rounded-lg"
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   const inputForm = (
     <form onSubmit={handleSubmit}>
       {/* File preview chips */}
       {attachedFiles.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-2">
-          {attachedFiles.map((file, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-1.5 bg-white/20 dark:bg-white/10 backdrop-blur-sm border border-white/30 dark:border-white/20 rounded-lg px-2 py-1 text-xs text-white"
-            >
-              {file.type.startsWith('image/') && filePreviewUrls[i] ? (
-                <img src={filePreviewUrls[i]!} alt="" className="h-5 w-5 rounded object-cover flex-shrink-0" />
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                </svg>
-              )}
-              <span className="max-w-[120px] truncate">{file.name}</span>
-              <button
-                type="button"
-                onClick={() => removeFile(i)}
-                className="text-white/60 hover:text-white flex-shrink-0 ml-0.5"
-                aria-label={`Remove ${file.name}`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </button>
-            </div>
-          ))}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {attachedFiles.map((file, i) => {
+            const isImage = file.type.startsWith('image/');
+            const url = filePreviewUrls[i];
+            return (
+              <div key={i} className="group relative">
+                <button
+                  type="button"
+                  onClick={() => url && setPreviewFile({ url, name: file.name, isPdf: !isImage })}
+                  className="flex items-center gap-2.5 bg-white/90 dark:bg-empower-800/90 backdrop-blur-sm border border-white/60 dark:border-empower-600/70 rounded-xl px-3 py-2 hover:border-empower-400 dark:hover:border-empower-400 transition-all shadow-sm text-left"
+                >
+                  {isImage && url ? (
+                    <img src={url} alt="" className="h-9 w-9 rounded-lg object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="h-9 w-9 rounded-lg bg-red-100 dark:bg-red-900/40 border border-red-200 dark:border-red-800/60 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[10px] font-bold text-red-500 dark:text-red-400 tracking-wider">PDF</span>
+                    </div>
+                  )}
+                  <div className="min-w-0 max-w-[140px]">
+                    <p className="text-xs font-medium text-empower-700 dark:text-empower-200 truncate leading-tight">{file.name}</p>
+                    <p className="text-[11px] text-empower-400 dark:text-empower-500 mt-0.5">{formatFileSize(file.size)}</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeFile(i)}
+                  aria-label={`Remove ${file.name}`}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-empower-500 hover:bg-empower-600 dark:bg-empower-600 dark:hover:bg-empower-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-sm"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -457,6 +517,7 @@ export default function ChatPage() {
         bg-[radial-gradient(ellipse_at_bottom,_#1a2f3f_0%,_#0d1a24_60%,_#060e14_100%)]
         dark:bg-[radial-gradient(ellipse_at_bottom,_#1a2f3f_0%,_#0d1a24_60%,_#060e14_100%)]
         [.light_&]:bg-none">
+        {filePreviewModal}
 
         {/* Light mode sunrise gradient */}
         <div className="absolute inset-0 dark:hidden
@@ -514,6 +575,7 @@ export default function ChatPage() {
   /* ── CHAT (messages exist) ── */
   return (
     <div className="relative flex flex-col h-screen overflow-hidden">
+      {filePreviewModal}
       {/* Same background as hero */}
       <div className="absolute inset-0 dark:hidden
         bg-[radial-gradient(ellipse_at_bottom,_#fde68a_0%,_#fca5a5_30%,_#c4b5d4_60%,_#bfdbf7_100%)]" />

@@ -72,7 +72,8 @@ export interface SleepMetrics {
 export interface MessageAttachment {
   type: 'image' | 'pdf';
   name: string;
-  url?: string; // object URL for inline image preview
+  url?: string;
+  size?: number;
 }
 
 /**

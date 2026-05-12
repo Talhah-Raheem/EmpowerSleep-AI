@@ -1,6 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 import ReactMarkdown from 'react-markdown';
 import { Message } from '@/lib/api';
 import { SourceList } from './SourceCard';
@@ -19,6 +25,7 @@ export function ChatMessage({ message, streaming, onRegenerate, onFeedback }: Ch
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<1 | -1 | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<{ url: string; name: string } | null>(null);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(message.content);
@@ -42,21 +49,27 @@ export function ChatMessage({ message, streaming, onRegenerate, onFeedback }: Ch
                     <button
                       key={i}
                       onClick={() => setLightboxUrl(att.url!)}
-                      className="rounded-lg overflow-hidden hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-white/50"
+                      className="rounded-xl overflow-hidden hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-white/50"
                       aria-label={`View ${att.name}`}
                     >
-                      <img src={att.url} alt={att.name} className="h-32 w-32 object-cover rounded-lg" />
+                      <img src={att.url} alt={att.name} className="h-28 w-28 object-cover rounded-xl" />
                     </button>
                   ) : (
-                    <div
+                    <button
                       key={i}
-                      className="flex items-center gap-1.5 bg-white/15 rounded-lg px-2 py-1.5 text-xs text-white/80"
+                      onClick={() => att.url && setPdfPreviewUrl({ url: att.url, name: att.name })}
+                      className="flex items-center gap-2.5 bg-white/15 hover:bg-white/25 border border-white/20 hover:border-white/40 rounded-xl px-3 py-2 transition-all text-left"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                      </svg>
-                      <span className="max-w-[160px] truncate">{att.name}</span>
-                    </div>
+                      <div className="h-9 w-9 rounded-lg bg-red-100/20 border border-red-300/30 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[10px] font-bold text-red-200 tracking-wider">PDF</span>
+                      </div>
+                      <div className="min-w-0 max-w-[140px]">
+                        <p className="text-xs font-medium text-white truncate leading-tight">{att.name}</p>
+                        {att.size && (
+                          <p className="text-[11px] text-white/50 mt-0.5">{formatFileSize(att.size)}</p>
+                        )}
+                      </div>
+                    </button>
                   )
                 )}
               </div>
@@ -64,7 +77,7 @@ export function ChatMessage({ message, streaming, onRegenerate, onFeedback }: Ch
           </div>
         </div>
 
-        {/* Lightbox */}
+        {/* Image lightbox */}
         {lightboxUrl && (
           <div
             className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
@@ -85,6 +98,39 @@ export function ChatMessage({ message, streaming, onRegenerate, onFeedback }: Ch
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* PDF preview modal */}
+        {pdfPreviewUrl && (
+          <div
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setPdfPreviewUrl(null)}
+          >
+            <div
+              className="relative bg-white dark:bg-empower-900 rounded-2xl shadow-2xl overflow-hidden w-full max-w-4xl flex flex-col"
+              style={{ maxHeight: '90vh' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-empower-100 dark:border-empower-700 flex-shrink-0">
+                <p className="text-sm font-medium text-empower-700 dark:text-empower-200 truncate pr-4">{pdfPreviewUrl.name}</p>
+                <button
+                  onClick={() => setPdfPreviewUrl(null)}
+                  aria-label="Close preview"
+                  className="p-1.5 rounded-lg text-empower-400 hover:text-empower-600 dark:hover:text-empower-200 hover:bg-empower-100 dark:hover:bg-empower-700 transition-colors flex-shrink-0"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+              <embed
+                src={pdfPreviewUrl.url}
+                type="application/pdf"
+                className="w-full flex-1"
+                style={{ minHeight: '75vh' }}
+              />
             </div>
           </div>
         )}
