@@ -29,7 +29,7 @@ from bs4 import BeautifulSoup, NavigableString
 # CONFIGURATION
 # =============================================================================
 
-BLOG_INDEX_URL = "https://www.empowersleep.com/blog"
+SITEMAP_URL = "https://www.empowersleep.com/sitemap.xml"
 ARTICLE_URL_PATTERN = "/articles/"  # URLs containing this are articles
 
 OUTPUT_PATH = Path(__file__).parent.parent / "data" / "blog_docs.jsonl"
@@ -87,34 +87,23 @@ def fetch_url(url: str, retries: int = MAX_RETRIES) -> Optional[str]:
 # URL EXTRACTION
 # =============================================================================
 
-def extract_article_urls(blog_index_html: str, base_url: str) -> List[str]:
+def extract_article_urls_from_sitemap(sitemap_xml: str) -> List[str]:
     """
-    Extract all unique article URLs from the blog index page.
+    Extract all article URLs from the sitemap XML.
 
     Args:
-        blog_index_html: HTML content of the blog index page
-        base_url: Base URL for resolving relative links
+        sitemap_xml: XML content of the sitemap
 
     Returns:
         List of unique, absolute article URLs
     """
-    soup = BeautifulSoup(blog_index_html, "html.parser")
-
     urls: Set[str] = set()
 
-    # Find all links on the page
-    for link in soup.find_all("a", href=True):
-        href = link["href"]
-
-        # Convert to absolute URL
-        absolute_url = urljoin(base_url, href)
-
-        # Check if it's an article URL
-        if ARTICLE_URL_PATTERN in absolute_url:
-            # Normalize: remove fragments and trailing slashes
-            parsed = urlparse(absolute_url)
-            normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path.rstrip('/')}"
-            urls.add(normalized)
+    for match in re.finditer(r'<loc>(.*?)</loc>', sitemap_xml):
+        url = match.group(1).strip()
+        if ARTICLE_URL_PATTERN in url:
+            # Normalize: remove trailing slashes
+            urls.add(url.rstrip("/"))
 
     # Sort for consistent ordering
     return sorted(urls)
@@ -276,16 +265,16 @@ def scrape_blog() -> List[Dict[str, str]]:
     Returns:
         List of article dicts with title, url, text
     """
-    print(f"Fetching blog index: {BLOG_INDEX_URL}")
+    print(f"Fetching sitemap: {SITEMAP_URL}")
 
-    # Step 1: Fetch the blog index page
-    index_html = fetch_url(BLOG_INDEX_URL)
-    if not index_html:
-        print("Error: Could not fetch blog index page")
+    # Step 1: Fetch the sitemap
+    sitemap_xml = fetch_url(SITEMAP_URL)
+    if not sitemap_xml:
+        print("Error: Could not fetch sitemap")
         return []
 
     # Step 2: Extract article URLs
-    article_urls = extract_article_urls(index_html, BLOG_INDEX_URL)
+    article_urls = extract_article_urls_from_sitemap(sitemap_xml)
     print(f"Found {len(article_urls)} unique article URLs")
 
     if not article_urls:
