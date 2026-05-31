@@ -1,6 +1,6 @@
 {
-  "build_timestamp": "2026-05-26T21:17:51.535450Z",
-  "source_file": "/Users/talhah/Code/EMPOWERSLEEP/data/blog_docs.jsonl",
+  "build_timestamp": "2026-05-31T07:46:33.667594Z",
+  "source_file": "/home/runner/work/EmpowerSleep-AI/EmpowerSleep-AI/data/blog_docs.jsonl",
   "num_articles": 106,
   "num_chunks": 174,
   "embedding_model": "text-embedding-3-small",
